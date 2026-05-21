@@ -14,6 +14,7 @@ app.use(
     origin: [
       'http://localhost:5173',
       'http://localhost:3000',
+      'https://rentflux.vercel.app',
       'https://rentflow-rosy.vercel.app',
     ],
     credentials: true,
