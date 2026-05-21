@@ -1,4 +1,4 @@
-# 🏠 RentFlow — Rent Management System
+# 🏠 RentFlux — Rent Management System
 
 A production-ready MERN stack rent management system for managing multiple properties, tenants, electricity bills, and rent slips.
 
@@ -17,7 +17,7 @@ cp .env.example .env
 Edit `server/.env`:
 ```
 PORT=5000
-MONGO_URI=mongodb+srv://<user>:<pass>@cluster0.xxxxx.mongodb.net/rentflow
+MONGO_URI=mongodb+srv://<user>:<pass>@cluster0.xxxxx.mongodb.net/rentflux
 JWT_SECRET=your_super_secret_key_min_32_chars
 JWT_EXPIRE=7d
 NODE_ENV=development
@@ -65,7 +65,7 @@ Open: **http://localhost:3000**
 ## 📁 Project Structure
 
 ```
-rentflow/
+rentflux/
 ├── server/
 │   ├── index.js               # Entry point
 │   ├── models/

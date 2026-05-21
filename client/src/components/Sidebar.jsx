@@ -44,7 +44,7 @@ const Sidebar = ({ open, onClose }) => {
             <Home size={18} className="text-white" />
           </div>
           <span className="font-heading text-base font-bold">
-            Rent<span className="text-blue-600">Flow</span>
+            Rent<span className="text-blue-600">Flux</span>
           </span>
         </div>
 

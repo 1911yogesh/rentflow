@@ -35,7 +35,7 @@ const Register = () => {
           <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4 shadow-lg">
             <Home size={26} className="text-white" />
           </div>
-          <h1 className="font-heading text-2xl font-bold">RentFlow</h1>
+          <h1 className="font-heading text-2xl font-bold">RentFlux</h1>
           <p className="text-sm text-gray-500 mt-1">Create your account</p>
         </div>
 

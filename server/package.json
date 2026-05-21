@@ -1,7 +1,7 @@
 {
-  "name": "rentflow-server",
+  "name": "rentflux-server",
   "version": "1.0.0",
-  "description": "RentFlow - Rent Management System Backend",
+  "description": "RentFlux - Rent Management System Backend",
   "main": "index.js",
   "scripts": {
     "dev": "nodemon index.js",

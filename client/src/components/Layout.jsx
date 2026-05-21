@@ -22,7 +22,7 @@ const Layout = () => {
             <Menu size={22} />
           </button>
           <span className="font-heading font-bold text-base">
-            Rent<span className="text-blue-600">Flow</span>
+            Rent<span className="text-blue-600">Flux</span>
           </span>
         </header>
 

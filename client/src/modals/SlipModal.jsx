@@ -79,7 +79,7 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <div style={{ fontSize: '22px', fontWeight: 700, color: '#2563eb', letterSpacing: '-0.5px' }}>
-            🏠 RentFlow
+            🏠 RentFlux
           </div>
           <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>Rent Payment Receipt</div>
         </div>

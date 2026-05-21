@@ -100,7 +100,7 @@ const Settings = () => {
 
         {/* App info */}
         <div className="card p-6 lg:col-span-2">
-          <h2 className="font-heading font-semibold text-base mb-4">About RentFlow</h2>
+          <h2 className="font-heading font-semibold text-base mb-4">About RentFlux</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             {[
               ['Version',   'v1.0.0'],
