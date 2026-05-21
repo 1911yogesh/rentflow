@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Sora:wght@400;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background-color: #f0ede8;
+    color: #1a1917;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, h5 {
+    font-family: 'Sora', sans-serif;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white border border-black/[0.07] rounded-xl shadow-sm;
+  }
+  .btn {
+    @apply inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold
+           transition-all duration-150 cursor-pointer border border-transparent whitespace-nowrap;
+  }
+  .btn-primary {
+    @apply bg-blue-600 text-white hover:bg-blue-700;
+  }
+  .btn-secondary {
+    @apply bg-[#f0ede8] text-gray-700 border-gray-300 hover:bg-gray-200;
+  }
+  .btn-danger {
+    @apply bg-red-50 text-red-600 border-red-200 hover:bg-red-100;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+  .form-input {
+    @apply w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm
+           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+           transition-all duration-150 bg-white;
+  }
+  .form-label {
+    @apply block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .badge-green  { @apply bg-green-50  text-green-700; }
+  .badge-red    { @apply bg-red-50    text-red-700; }
+  .badge-amber  { @apply bg-amber-50  text-amber-700; }
+  .badge-blue   { @apply bg-blue-50   text-blue-700; }
+  .badge-gray   { @apply bg-gray-100  text-gray-500; }
+}
+
+/* Skeleton loading animation */
+.skeleton {
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* Mobile bottom-nav safe area */
+.mobile-safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
