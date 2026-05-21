@@ -8,26 +8,14 @@ dotenv.config();
 
 const app = express();
 
-// ── Allowed Origins ────────────────────────────────────────────────────────────
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  process.env.CLIENT_URL,
-];
-
 // ── Middleware ─────────────────────────────────────────────────────────────────
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (mobile apps/postman)
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://rentflow-rosy.vercel.app',
+    ],
     credentials: true,
   })
 );
