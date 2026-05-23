@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, Search, ChevronLeft } from 'lucide-react';
+import { Plus, Search, ChevronLeft, Pencil, Trash2, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { housesAPI, areasAPI } from '../services/api';
-import { fmtCurrency, fmtDate, statusColor } from '../utils/helpers';
+import { fmtCurrency } from '../utils/helpers';
 import { EmptyState, PageLoader, StatCard } from '../components/UI';
-import HouseModal      from '../modals/HouseModal';
-import TenantModal     from '../modals/TenantModal';
+import HouseModal       from '../modals/HouseModal';
+import TenantModal      from '../modals/TenantModal';
 import HouseDetailModal from '../modals/HouseDetailModal';
 
 const Houses = () => {
@@ -19,7 +19,9 @@ const Houses = () => {
   const [search,  setSearch]  = useState('');
   const [filter,  setFilter]  = useState('all');
 
+  // Modal state
   const [houseModal,  setHouseModal]  = useState(false);
+  const [editHouse,   setEditHouse]   = useState(null);  // house being edited
   const [tenantHouse, setTenantHouse] = useState(null);
   const [detailHouse, setDetailHouse] = useState(null);
   const [confirmDel,  setConfirmDel]  = useState(null);
@@ -54,20 +56,28 @@ const Houses = () => {
     setConfirmDel(null);
   };
 
-  // Derived stats
+  // Open add modal
+  const openAdd = () => {
+    setEditHouse(null);
+    setHouseModal(true);
+  };
+
+  // Open edit modal with the selected house pre-loaded
+  const openEdit = (house) => {
+    setEditHouse(house);
+    setHouseModal(true);
+  };
+
+  // Stats
   const occupied   = houses.filter((h) => h.status === 'occupied').length;
-  const vacant     = houses.length - occupied;
   const pendingDue = houses.reduce((s, h) => s + (h.prevDue || 0), 0);
 
   // Filtered list
   const displayed = houses.filter((h) => {
-    const number = h.number || '';
-    const tenantName = h.tenantName || '';
-    const phone = h.phone || '';
     const matchSearch =
-      number.toLowerCase().includes(search.toLowerCase()) ||
-      tenantName.toLowerCase().includes(search.toLowerCase()) ||
-      phone.includes(search);
+      (h.number     || '').toLowerCase().includes(search.toLowerCase()) ||
+      (h.tenantName || '').toLowerCase().includes(search.toLowerCase()) ||
+      (h.phone      || '').includes(search);
     const matchFilter = filter === 'all' || h.status === filter;
     return matchSearch && matchFilter;
   });
@@ -90,16 +100,16 @@ const Houses = () => {
           <h1 className="font-heading text-2xl font-bold">{area?.name || 'Houses'}</h1>
           <p className="text-sm text-gray-400 mt-0.5">{area?.city} · {houses.length} houses</p>
         </div>
-        <button onClick={() => setHouseModal(true)} className="btn btn-primary gap-1.5">
+        <button onClick={openAdd} className="btn btn-primary gap-1.5">
           <Plus size={16} /> Add House
         </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <StatCard label="Total"    value={houses.length} icon="🏠" color="blue" />
-        <StatCard label="Occupied" value={occupied}       icon="👤" color="green" />
-        <StatCard label="Pending"  value={fmtCurrency(pendingDue)} icon="⚠️" color="red" />
+        <StatCard label="Total"    value={houses.length}          icon="🏠" color="blue"  />
+        <StatCard label="Occupied" value={occupied}               icon="👤" color="green" />
+        <StatCard label="Pending"  value={fmtCurrency(pendingDue)} icon="⚠️" color="red"  />
       </div>
 
       {/* Filters */}
@@ -115,8 +125,7 @@ const Houses = () => {
         <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1">
           {['all', 'occupied', 'vacant'].map((f) => (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
+              key={f} onClick={() => setFilter(f)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${
                 filter === f ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-700'
               }`}
@@ -135,8 +144,9 @@ const Houses = () => {
               key={house._id}
               house={house}
               onClick={() => setDetailHouse(house)}
-              onAddTenant={() => setTenantHouse(house)}
-              onDelete={() => setConfirmDel(house)}
+              onEdit={(e)      => { e.stopPropagation(); openEdit(house); }}
+              onAddTenant={(e) => { e.stopPropagation(); setTenantHouse(house); }}
+              onDelete={(e)    => { e.stopPropagation(); setConfirmDel(house); }}
             />
           ))}
         </div>
@@ -147,16 +157,18 @@ const Houses = () => {
             title={search ? 'No houses found' : 'No houses yet'}
             description={search ? `No results for "${search}"` : 'Add the first house to this area'}
             action={!search && (
-              <button onClick={() => setHouseModal(true)} className="btn btn-primary">Add House</button>
+              <button onClick={openAdd} className="btn btn-primary">Add House</button>
             )}
           />
         </div>
       )}
 
-      {/* Modals */}
+      {/* Add / Edit House Modal — same modal, house prop controls mode */}
       <HouseModal
-        open={houseModal} areaId={areaId}
-        onClose={() => setHouseModal(false)}
+        open={houseModal}
+        areaId={areaId}
+        house={editHouse}
+        onClose={() => { setHouseModal(false); setEditHouse(null); }}
         onSave={load}
       />
 
@@ -172,14 +184,18 @@ const Houses = () => {
         onSave={load}
       />
 
+      {/* Delete Confirmation */}
       {confirmDel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }}>
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl">
-            <p className="font-semibold mb-2">Delete house "{confirmDel.number}"?</p>
-            <p className="text-sm text-gray-500 mb-5">All payment history for this house will also be deleted.</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="text-3xl mb-3">🗑️</div>
+            <p className="font-semibold text-gray-900 mb-1">Delete house "{confirmDel.number}"?</p>
+            <p className="text-sm text-gray-500 mb-5">
+              All rent records and payment history for this house will also be permanently deleted.
+            </p>
             <div className="flex gap-2 justify-end">
               <button className="btn btn-secondary" onClick={() => setConfirmDel(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={() => handleDelete(confirmDel)}>Delete</button>
+              <button className="btn btn-danger"    onClick={() => handleDelete(confirmDel)}>Delete</button>
             </div>
           </div>
         </div>
@@ -189,15 +205,37 @@ const Houses = () => {
 };
 
 // ── House Card ─────────────────────────────────────────────────────────────────
-const HouseCard = ({ house, onClick, onAddTenant, onDelete }) => {
+const HouseCard = ({ house, onClick, onEdit, onAddTenant, onDelete }) => {
   const isOccupied = house.status === 'occupied';
 
   return (
     <div
-      className="card p-4 cursor-pointer hover:-translate-y-0.5 hover:shadow-md transition-all duration-200"
+      className="card p-4 cursor-pointer hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 relative"
       onClick={onClick}
     >
-      <div className="flex items-start justify-between mb-3">
+      {/* Edit & Delete action buttons — always visible in top-right */}
+      <div
+        className="absolute top-3 right-3 flex items-center gap-1"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onEdit}
+          className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition"
+          title="Edit house"
+        >
+          <Pencil size={14} />
+        </button>
+        <button
+          onClick={onDelete}
+          className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition"
+          title="Delete house"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+
+      {/* Header — leave right padding so buttons don't overlap */}
+      <div className="flex items-start justify-between mb-3 pr-16">
         <div>
           <span className="text-xs font-bold text-blue-600 font-heading">{house.number}</span>
           <p className="font-semibold text-sm mt-0.5">
@@ -217,15 +255,22 @@ const HouseCard = ({ house, onClick, onAddTenant, onDelete }) => {
         </div>
       </div>
 
+      {/* Rent details grid */}
       {isOccupied && (
         <div className="bg-gray-50 rounded-lg p-2.5 text-xs grid grid-cols-2 gap-1.5 mb-3">
           <div><span className="text-gray-400">Rent: </span><strong>{fmtCurrency(house.roomRent)}</strong></div>
           <div><span className="text-gray-400">Water: </span><strong>{fmtCurrency(house.waterBill)}</strong></div>
           <div><span className="text-gray-400">Deposit: </span><strong>{fmtCurrency(house.deposit)}</strong></div>
-          <div><span className="text-gray-400">Unit: </span><strong>₹{house.elecPerUnit}</strong></div>
+          <div>
+            {house.elecType === 'fixed'
+              ? <><span className="text-gray-400">Elec: </span><strong>{fmtCurrency(house.elecFixed)}</strong></>
+              : <><span className="text-gray-400">Unit: </span><strong>₹{house.elecPerUnit}</strong></>
+            }
+          </div>
         </div>
       )}
 
+      {/* Footer */}
       <div className="flex items-center justify-between pt-2 border-t border-gray-100">
         {isOccupied ? (
           <>
@@ -239,33 +284,33 @@ const HouseCard = ({ house, onClick, onAddTenant, onDelete }) => {
                 <p className="text-xs text-green-600 font-semibold">✅ No dues</p>
               )}
             </div>
-            <div className="text-right">
-              <p className="text-[10px] text-gray-400">Prev Reading</p>
-              <p className="font-semibold text-xs">{house.prevReading} units</p>
+            <div className="flex items-center gap-2">
+              <div className="text-right">
+                <p className="text-[10px] text-gray-400">Prev Reading</p>
+                <p className="font-semibold text-xs">{house.prevReading} units</p>
+              </div>
+              {/* Edit tenant button */}
+              <button
+                onClick={onAddTenant}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                title="Edit tenant details"
+              >
+                <UserPlus size={14} />
+              </button>
             </div>
           </>
         ) : (
           <>
             <p className="text-xs text-gray-400">{fmtCurrency(house.roomRent)}/month</p>
             <button
-              className="btn btn-primary btn-sm"
-              onClick={(e) => { e.stopPropagation(); onAddTenant(); }}
+              className="btn btn-primary btn-sm flex items-center gap-1"
+              onClick={onAddTenant}
             >
-              Add Tenant
+              <UserPlus size={13} /> Add Tenant
             </button>
           </>
         )}
       </div>
-
-      {/* Delete button */}
-      <button
-        className="absolute top-3 right-3 btn btn-ghost p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"
-        onClick={(e) => { e.stopPropagation(); onDelete(); }}
-        style={{ position: 'absolute', top: 12, right: 12 }}
-        title="Delete house"
-      >
-        🗑️
-      </button>
     </div>
   );
 };

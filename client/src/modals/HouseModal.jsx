@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { housesAPI } from '../services/api';
 import { Modal, FormGroup } from '../components/UI';
@@ -8,12 +8,32 @@ const DEFAULT_FORM = {
   elecType: 'per_unit', elecPerUnit: '11', elecFixed: '',
 };
 
-const HouseModal = ({ open, onClose, onSave, areaId }) => {
+// house prop = existing house when editing, null when adding
+const HouseModal = ({ open, onClose, onSave, areaId, house }) => {
+  const isEditing = !!house;
+
   const [form, setForm]       = useState(DEFAULT_FORM);
   const [loading, setLoading] = useState(false);
 
+  // Pre-fill form with existing house data when editing
+  useEffect(() => {
+    if (open) {
+      if (house) {
+        setForm({
+          number:      house.number      || '',
+          roomRent:    house.roomRent    != null ? String(house.roomRent)    : '',
+          waterBill:   house.waterBill   != null ? String(house.waterBill)   : '0',
+          elecType:    house.elecType    || 'per_unit',
+          elecPerUnit: house.elecPerUnit != null ? String(house.elecPerUnit) : '11',
+          elecFixed:   house.elecFixed   != null ? String(house.elecFixed)   : '',
+        });
+      } else {
+        setForm(DEFAULT_FORM);
+      }
+    }
+  }, [open, house?._id]);
+
   const handle = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
-  const reset  = () => setForm(DEFAULT_FORM);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -24,23 +44,28 @@ const HouseModal = ({ open, onClose, onSave, areaId }) => {
     if (form.elecType === 'fixed' && !form.elecFixed)
       return toast.error('Fixed electricity amount is required');
 
+    const payload = {
+      number:      form.number.trim(),
+      roomRent:    Number(form.roomRent),
+      waterBill:   Number(form.waterBill)   || 0,
+      elecType:    form.elecType,
+      elecPerUnit: Number(form.elecPerUnit) || 11,
+      elecFixed:   Number(form.elecFixed)   || 0,
+    };
+
     setLoading(true);
     try {
-      await housesAPI.create({
-        area:        areaId,
-        number:      form.number.trim(),
-        roomRent:    Number(form.roomRent),
-        waterBill:   Number(form.waterBill) || 0,
-        elecType:    form.elecType,
-        elecPerUnit: Number(form.elecPerUnit) || 11,
-        elecFixed:   Number(form.elecFixed)   || 0,
-      });
-      toast.success('House added');
-      reset();
+      if (isEditing) {
+        await housesAPI.update(house._id, payload);
+        toast.success('House updated');
+      } else {
+        await housesAPI.create({ area: areaId, ...payload });
+        toast.success('House added');
+      }
       onSave();
       onClose();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to add house');
+      toast.error(err?.response?.data?.message || `Failed to ${isEditing ? 'update' : 'add'} house`);
     } finally {
       setLoading(false);
     }
@@ -49,12 +74,13 @@ const HouseModal = ({ open, onClose, onSave, areaId }) => {
   return (
     <Modal
       open={open} onClose={onClose}
-      title="Add New House" size="md"
+      title={isEditing ? `Edit House — ${house?.number || ''}` : 'Add New House'}
+      size="md"
       footer={
         <>
           <button className="btn btn-secondary" onClick={onClose} type="button">Cancel</button>
           <button className="btn btn-primary" onClick={submit} disabled={loading}>
-            {loading ? 'Adding…' : 'Add House'}
+            {loading ? (isEditing ? 'Saving…' : 'Adding…') : (isEditing ? 'Save Changes' : 'Add House')}
           </button>
         </>
       }
