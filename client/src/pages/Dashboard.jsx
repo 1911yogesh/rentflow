@@ -18,7 +18,7 @@ const Dashboard = () => {
     setLoading(true);
     try {
       const [dashRes, areasRes] = await Promise.all([
-        rentRecordsAPI.dashboard(),
+        rentRecordsAPI.getDashboard(),
         areasAPI.getAll(),
       ]);
       setStats(dashRes.data.data);

@@ -9,7 +9,7 @@ const houseSchema = new mongoose.Schema(
     // Occupancy
     status: { type: String, enum: ['occupied', 'vacant'], default: 'vacant' },
 
-    // Tenant basic info (stored here for quick access; no separate Tenant collection)
+    // Tenant info
     tenantName:  { type: String, trim: true, default: '' },
     phone:       { type: String, trim: true, default: '' },
     altPhone:    { type: String, trim: true, default: '' },
@@ -20,9 +20,14 @@ const houseSchema = new mongoose.Schema(
     // Rent configuration
     roomRent:    { type: Number, required: true, default: 0 },
     waterBill:   { type: Number, default: 0 },
-    elecPerUnit: { type: Number, default: 11 },
 
-    // Meter readings
+    // ── Electricity Configuration (NEW) ──────────────────────────────────────
+    // 'per_unit' = (curr - prev) × rate  |  'fixed' = flat fixed amount
+    elecType:    { type: String, enum: ['per_unit', 'fixed'], default: 'per_unit' },
+    elecPerUnit: { type: Number, default: 11 },   // used when elecType = 'per_unit'
+    elecFixed:   { type: Number, default: 0 },    // used when elecType = 'fixed'
+
+    // Meter readings (used when elecType = 'per_unit')
     prevReading: { type: Number, default: 0 },
     currReading: { type: Number, default: 0 },
 
@@ -34,7 +39,6 @@ const houseSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Compound unique index – same house number cannot repeat in same area
 houseSchema.index({ area: 1, number: 1 }, { unique: true });
 
 module.exports = mongoose.model('House', houseSchema);

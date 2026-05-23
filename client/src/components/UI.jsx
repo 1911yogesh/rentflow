@@ -35,23 +35,23 @@ export const Modal = ({ open, onClose, title, children, footer, size = 'md' }) =
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className={`bg-white rounded-xl shadow-xl w-full ${maxW} max-h-[90vh] flex flex-col`}
+        className={`bg-white rounded-xl shadow-2xl border border-white/80 w-full ${maxW} max-h-[92vh] flex flex-col`}
         style={{ animation: 'modalSlideUp 0.2s ease' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <h2 className="text-base font-semibold font-heading">{title}</h2>
-          <button onClick={onClose} className="btn btn-ghost p-1.5 rounded-lg">
+        <div className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-b border-gray-200 shrink-0">
+          <h2 className="text-base font-semibold font-heading text-gray-900 truncate">{title}</h2>
+          <button onClick={onClose} className="btn btn-ghost p-1.5 rounded-lg shrink-0" aria-label="Close modal">
             <X size={18} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 py-5">{children}</div>
+        <div className="overflow-y-auto flex-1 px-5 sm:px-6 py-5">{children}</div>
 
         {/* Footer */}
         {footer && (
-          <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 shrink-0">
+          <div className="px-5 sm:px-6 py-4 border-t border-gray-200 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 bg-gray-50/70 rounded-b-xl">
             {footer}
           </div>
         )}

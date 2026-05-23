@@ -3,20 +3,27 @@ import toast from 'react-hot-toast';
 import { housesAPI } from '../services/api';
 import { Modal, FormGroup } from '../components/UI';
 
+const DEFAULT_FORM = {
+  number: '', roomRent: '', waterBill: '300',
+  elecType: 'per_unit', elecPerUnit: '11', elecFixed: '',
+};
+
 const HouseModal = ({ open, onClose, onSave, areaId }) => {
-  const [form, setForm] = useState({
-    number: '', roomRent: '', waterBill: '300', elecPerUnit: '11',
-  });
+  const [form, setForm]       = useState(DEFAULT_FORM);
   const [loading, setLoading] = useState(false);
 
   const handle = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
-
-  const reset = () => setForm({ number: '', roomRent: '', waterBill: '300', elecPerUnit: '11' });
+  const reset  = () => setForm(DEFAULT_FORM);
 
   const submit = async (e) => {
     e.preventDefault();
     if (!form.number.trim()) return toast.error('House number is required');
     if (!form.roomRent)      return toast.error('Room rent is required');
+    if (form.elecType === 'per_unit' && !form.elecPerUnit)
+      return toast.error('Per unit rate is required');
+    if (form.elecType === 'fixed' && !form.elecFixed)
+      return toast.error('Fixed electricity amount is required');
+
     setLoading(true);
     try {
       await housesAPI.create({
@@ -24,7 +31,9 @@ const HouseModal = ({ open, onClose, onSave, areaId }) => {
         number:      form.number.trim(),
         roomRent:    Number(form.roomRent),
         waterBill:   Number(form.waterBill) || 0,
+        elecType:    form.elecType,
         elecPerUnit: Number(form.elecPerUnit) || 11,
+        elecFixed:   Number(form.elecFixed)   || 0,
       });
       toast.success('House added');
       reset();
@@ -66,12 +75,40 @@ const HouseModal = ({ open, onClose, onSave, areaId }) => {
             <input name="waterBill" value={form.waterBill} onChange={handle}
               className="form-input" type="number" placeholder="300" min="0" />
           </FormGroup>
+
+          {/* Electricity Config */}
           <div className="col-span-2">
-            <FormGroup label="Electricity Rate (₹ per unit)">
-              <input name="elecPerUnit" value={form.elecPerUnit} onChange={handle}
-                className="form-input" type="number" placeholder="11" min="0" step="0.5" />
+            <FormGroup label="Electricity Calculation Type">
+              <div className="grid grid-cols-2 gap-2">
+                {[['per_unit','⚡ Per Unit'], ['fixed','📌 Fixed Amount']].map(([val, lbl]) => (
+                  <label key={val}
+                    className={`flex items-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition ${form.elecType === val ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
+                  >
+                    <input type="radio" name="elecType" value={val} checked={form.elecType === val}
+                      onChange={handle} className="text-blue-600" />
+                    <span className="text-sm font-medium">{lbl}</span>
+                  </label>
+                ))}
+              </div>
             </FormGroup>
           </div>
+
+          {form.elecType === 'per_unit' ? (
+            <div className="col-span-2">
+              <FormGroup label="Rate per Unit (₹)">
+                <input name="elecPerUnit" value={form.elecPerUnit} onChange={handle}
+                  className="form-input" type="number" placeholder="11" min="0" step="0.5" />
+              </FormGroup>
+            </div>
+          ) : (
+            <div className="col-span-2">
+              <FormGroup label="Fixed Electricity Amount (₹/month)">
+                <input name="elecFixed" value={form.elecFixed} onChange={handle}
+                  className="form-input" type="number" placeholder="500" min="0" required />
+              </FormGroup>
+              <p className="text-xs text-gray-400 mt-1">This fixed amount will be added to every bill automatically.</p>
+            </div>
+          )}
         </div>
       </form>
     </Modal>

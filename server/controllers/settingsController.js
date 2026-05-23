@@ -1,27 +1,36 @@
 const AppSettings = require('../models/AppSettings');
 
+// GET /api/settings
 exports.getSettings = async (req, res) => {
   try {
-    let settings = await AppSettings.findOne({ owner: req.user._id });
-    if (!settings) {
-      settings = await AppSettings.create({ owner: req.user._id });
-    }
+    const settings = await AppSettings.findOneAndUpdate(
+      { owner: req.user._id },
+      { $setOnInsert: { owner: req.user._id } },
+      { upsert: true, new: true }
+    );
     res.json({ success: true, data: settings });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
+// PUT /api/settings
 exports.updateSettings = async (req, res) => {
   try {
-    const allowed = ['showElectricityBreakdown'];
+    const allowed = [
+      'showElectricityBreakdown',
+      'qrType', 'upiId', 'upiName', 'upiNote', 'customQrUrl',
+      'ownerName', 'ownerPhone', 'propertyName',
+    ];
     const updates = {};
-    allowed.forEach((k) => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
+    allowed.forEach((k) => {
+      if (req.body[k] !== undefined) updates[k] = req.body[k];
+    });
 
     const settings = await AppSettings.findOneAndUpdate(
       { owner: req.user._id },
       { $set: updates },
-      { new: true, upsert: true, runValidators: true }
+      { upsert: true, new: true }
     );
     res.json({ success: true, data: settings });
   } catch (err) {

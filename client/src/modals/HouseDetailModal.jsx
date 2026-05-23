@@ -136,7 +136,7 @@ const HouseDetailModal = ({ open, onClose, onSave, house: initialHouse }) => {
                 <InfoCard title="Rent Config">
                   <InfoRow label="Room Rent"  value={fmtCurrency(house.roomRent)} />
                   <InfoRow label="Water Bill" value={fmtCurrency(house.waterBill)} />
-                  <InfoRow label="Per Unit"   value={`₹${house.elecPerUnit}`} />
+                  {house.elecType === 'fixed' ? (<InfoRow label="Electricity" value={`₹${house.elecFixed} (Fixed)`} />) : (<InfoRow label="Per Unit" value={`₹${house.elecPerUnit}`} />)}
                   <InfoRow label="Prev Meter" value={`${house.prevReading} units`} />
                 </InfoCard>
               </div>
@@ -260,7 +260,7 @@ const RecordCard = ({ record: r, onAddPayment, onViewSlip, onEdit, onDelete, onD
           <div className="bg-white rounded-lg p-3 text-xs space-y-1">
             <BillLine label="Room Rent"   val={r.roomRent}    />
             <BillLine label="Water Bill"  val={r.waterBill}   />
-            <BillLine label="Electricity" val={r.elecBill}    sub={`${r.units} × ₹${r.perUnit}`} />
+            <BillLine label="Electricity" val={r.elecBill} sub={r.elecType === 'fixed' ? 'Fixed amount' : `${r.units} × ₹${r.perUnit}`} />
             {(r.previousDue?.final > 0 || r.previousDue > 0) && <BillLine label="Prev Due" val={r.previousDue} red />}
           </div>
 

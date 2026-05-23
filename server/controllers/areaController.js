@@ -1,5 +1,8 @@
 const Area  = require('../models/Area');
 const House = require('../models/House');
+const Payment = require('../models/Payment');
+const RentRecord = require('../models/RentRecord');
+const PaymentTransaction = require('../models/PaymentTransaction');
 
 // ── GET /api/areas ─────────────────────────────────────────────────────────────
 // Returns all areas for logged-in user, enriched with house/due stats
@@ -10,10 +13,11 @@ exports.getAreas = async (req, res) => {
     // Enrich each area with stats from houses
     const enriched = await Promise.all(
       areas.map(async (area) => {
-        const houses   = await House.find({ area: area._id });
+        const houses   = await House.find({ area: area._id, owner: req.user._id });
         const occupied = houses.filter((h) => h.status === 'occupied').length;
         const vacant   = houses.length - occupied;
-        const pendingDue = houses.reduce((s, h) => s + (h.prevDue || 0), 0);
+        const records = await RentRecord.find({ owner: req.user._id, house: { $in: houses.map((h) => h._id) } }).lean();
+        const pendingDue = records.reduce((s, r) => s + Math.max(0, (r.totalAmount || 0) - (r.totalPaid || 0)), 0);
 
         return {
           ...area.toObject(),
@@ -65,8 +69,15 @@ exports.deleteArea = async (req, res) => {
     const area = await Area.findOne({ _id: req.params.id, owner: req.user._id });
     if (!area) return res.status(404).json({ success: false, message: 'Area not found' });
 
-    // Cascade-delete all houses in this area
-    await House.deleteMany({ area: area._id });
+    const houses = await House.find({ area: area._id, owner: req.user._id }).select('_id');
+    const houseIds = houses.map((h) => h._id);
+    const records = await RentRecord.find({ house: { $in: houseIds }, owner: req.user._id }).select('_id');
+    const recordIds = records.map((r) => r._id);
+
+    await PaymentTransaction.deleteMany({ rentRecord: { $in: recordIds }, owner: req.user._id });
+    await RentRecord.deleteMany({ _id: { $in: recordIds }, owner: req.user._id });
+    await Payment.deleteMany({ house: { $in: houseIds }, owner: req.user._id });
+    await House.deleteMany({ area: area._id, owner: req.user._id });
     await area.deleteOne();
 
     res.json({ success: true, message: 'Area deleted' });

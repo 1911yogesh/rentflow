@@ -29,7 +29,7 @@ const Houses = () => {
     try {
       const [areaRes, housesRes] = await Promise.all([
         areasAPI.getAll(),
-        housesAPI.getAll(areaId),
+        housesAPI.getAll({ area: areaId }),
       ]);
       const foundArea = areaRes.data.data.find((a) => a._id === areaId);
       setArea(foundArea || null);
@@ -61,10 +61,13 @@ const Houses = () => {
 
   // Filtered list
   const displayed = houses.filter((h) => {
+    const number = h.number || '';
+    const tenantName = h.tenantName || '';
+    const phone = h.phone || '';
     const matchSearch =
-      h.number.toLowerCase().includes(search.toLowerCase()) ||
-      h.tenantName.toLowerCase().includes(search.toLowerCase()) ||
-      h.phone.includes(search);
+      number.toLowerCase().includes(search.toLowerCase()) ||
+      tenantName.toLowerCase().includes(search.toLowerCase()) ||
+      phone.includes(search);
     const matchFilter = filter === 'all' || h.status === filter;
     return matchSearch && matchFilter;
   });

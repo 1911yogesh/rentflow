@@ -7,16 +7,20 @@ import { useSettings } from '../context/SettingsContext';
 const METHOD_ICONS = { cash: '💵', upi: '📱', bank_transfer: '🏦', cheque: '📄', other: '🔄' };
 
 /**
- * SlipModal — renders the slip print view and payment timeline.
- * Works with BOTH old Payment records and new RentRecord (auto-detected).
+ * Generates a UPI QR image URL using the qrserver.com API.
+ * UPI deep-link format: upi://pay?pa=<id>&pn=<name>&am=<amount>&cu=INR&tn=<note>
  */
+const makeUpiQrUrl = (upiId, upiName, amount, upiNote) => {
+  const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName || '')}&am=${amount || ''}&cu=INR&tn=${encodeURIComponent(upiNote || 'Rent Payment')}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(upiLink)}`;
+};
+
 const SlipModal = ({ open, onClose, payment: p, house }) => {
   const slipRef = useRef(null);
   const { settings } = useSettings();
 
   if (!p || !house) return null;
 
-  // Normalize: support both old Payment schema and new RentRecord schema
   const isNew     = !!(p.roomRent?.final !== undefined || p.roomRent?.auto !== undefined);
   const roomRent  = isNew ? (p.roomRent?.final  ?? 0) : (p.roomRent  ?? 0);
   const waterBill = isNew ? (p.waterBill?.final ?? 0) : (p.waterBill ?? 0);
@@ -29,15 +33,29 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
   const areaName  = house?.area?.name || '';
   const transactions = p.transactions || [];
 
+  // Electricity display
+  const elecIsFixed = p.elecType === 'fixed';
+  const elecSubLabel = elecIsFixed
+    ? `Fixed amount`
+    : settings.showElectricityBreakdown
+      ? `Prev: ${p.prevReading} → Curr: ${p.currReading} (${p.units} units × ₹${p.perUnit})`
+      : `Prev: ${p.prevReading} → Curr: ${p.currReading}`;
+
+  // QR section
+  const showQR     = settings.qrType === 'upi' || settings.qrType === 'custom';
+  const qrImageUrl = settings.qrType === 'upi' && settings.upiId
+    ? makeUpiQrUrl(settings.upiId, settings.upiName, remaining || totalAmt, settings.upiNote)
+    : settings.customQrUrl;
+
   const downloadPDF = async () => {
     try {
       const html2canvas = (await import('html2canvas')).default;
       const jsPDF       = (await import('jspdf')).default;
-      const canvas = await html2canvas(slipRef.current, { scale: 2, useCORS: true });
+      const canvas = await html2canvas(slipRef.current, { scale: 2, useCORS: true, allowTaint: true });
       const img    = canvas.toDataURL('image/png');
       const pdf    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
-      const w      = pdf.internal.pageSize.getWidth();
-      const h      = (canvas.height * w) / canvas.width;
+      const w = pdf.internal.pageSize.getWidth();
+      const h = (canvas.height * w) / canvas.width;
       pdf.addImage(img, 'PNG', 0, 0, w, h);
       pdf.save(`RentSlip_${house.tenantName}_${p.month}.pdf`);
       toast.success('PDF downloaded');
@@ -47,7 +65,7 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
   const downloadImage = async () => {
     try {
       const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(slipRef.current, { scale: 2, useCORS: true });
+      const canvas = await html2canvas(slipRef.current, { scale: 2, useCORS: true, allowTaint: true });
       const link   = document.createElement('a');
       link.download = `RentSlip_${house.tenantName}_${p.month}.png`;
       link.href     = canvas.toDataURL('image/png');
@@ -59,20 +77,17 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
   const printSlip = () => {
     const content = slipRef.current.innerHTML;
     const w = window.open('', '_blank');
-    w.document.write(`
-      <html><head><title>Rent Slip</title>
-      <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: sans-serif; padding: 24px; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th, td { padding: 8px 10px; }
-        th { background: #f9fafb; text-align: left; font-size: 11px; color: #6b7280; text-transform: uppercase; }
-        td { border-bottom: 1px solid #f3f4f6; }
-      </style></head>
-      <body>${content}
+    w.document.write(`<html><head><title>Rent Slip</title>
+      <style>* { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: sans-serif; padding: 24px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { padding: 8px 10px; }
+      th { background: #f9fafb; text-align: left; font-size: 11px; color: #6b7280; text-transform: uppercase; }
+      td { border-bottom: 1px solid #f3f4f6; }
+      img { max-width: 100%; }
+      </style></head><body>${content}
       <script>window.onload = () => { window.print(); window.close(); }<\/script>
-      </body></html>
-    `);
+      </body></html>`);
     w.document.close();
   };
 
@@ -98,23 +113,39 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
     >
       {/* Printable slip */}
       <div ref={slipRef} style={{ background: '#fff', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb', fontFamily: 'sans-serif' }}>
+        
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-          <div style={{ fontSize: '22px', fontWeight: 700, color: '#2563eb', letterSpacing: '-0.5px' }}>🏠 RentFlux</div>
-          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>Rent Payment Receipt</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+          <div>
+            <div style={{ fontSize: '22px', fontWeight: 700, color: '#2563eb', letterSpacing: '-0.5px' }}>
+              🏠 {settings.propertyName || 'RentFlux'}
+            </div>
+            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>Rent Payment Receipt</div>
+            {settings.ownerName && (
+              <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '2px' }}>
+                {settings.ownerName}{settings.ownerPhone ? ` · ${settings.ownerPhone}` : ''}
+              </div>
+            )}
+          </div>
+          {p.receiptId && (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '10px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Receipt No.</div>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>{p.receiptId}</div>
+            </div>
+          )}
         </div>
 
         <div style={{ borderTop: '2px dashed #e5e7eb', margin: '16px 0' }} />
 
-        {/* Tenant info */}
+        {/* Tenant info grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
           {[
-            ['Tenant',       house.tenantName],
-            ['House No.',    house.number],
-            ['Area',         areaName],
-            ['Month',        monthLabel(p.month)],
-            ['Generated',    new Date(p.generatedAt || p.createdAt).toLocaleDateString('en-IN')],
-            ['Phone',        house.phone],
+            ['Tenant',    house.tenantName],
+            ['House No.', house.number],
+            ['Area',      areaName],
+            ['Month',     monthLabel(p.month)],
+            ['Generated', new Date(p.generatedAt || p.createdAt).toLocaleDateString('en-IN')],
+            ['Phone',     house.phone],
           ].map(([lbl, val]) => (
             <div key={lbl}>
               <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9ca3af', fontWeight: 600 }}>{lbl}</div>
@@ -139,12 +170,8 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
             <SlipRow label="Water Bill" value={fmtCurrency(waterBill)}
               override={isNew && p.waterBill?.overridden} autoVal={isNew ? p.waterBill?.auto : null} />
             <SlipRow
-              label="Electricity Bill"
-              sub={
-                settings.showElectricityBreakdown
-                  ? `Prev: ${p.prevReading} → Curr: ${p.currReading} (${p.units} units × ₹${p.perUnit})`
-                  : `Prev: ${p.prevReading} → Curr: ${p.currReading}`
-              }
+              label={elecIsFixed ? 'Electricity (Fixed)' : 'Electricity Bill'}
+              sub={elecSubLabel}
               value={fmtCurrency(elecBill)}
               override={isNew && p.elecBill?.overridden} autoVal={isNew ? p.elecBill?.auto : null}
             />
@@ -163,26 +190,53 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
 
         <div style={{ borderTop: '2px dashed #e5e7eb', margin: '20px 0 16px' }} />
 
-        {/* Footer */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ width: '100px', borderBottom: '1px solid #374151', marginBottom: '4px', height: '28px' }} />
-            <div style={{ fontSize: '10px', color: '#6b7280' }}>Owner Signature</div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '6px' }}>
-              Generated: {new Date().toLocaleDateString('en-IN')}
+        {/* Footer: QR + signature */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px' }}>
+          
+          {/* QR Payment Section */}
+          {showQR && qrImageUrl ? (
+            <div style={{ textAlign: 'center' }}>
+              <img
+                src={qrImageUrl} alt="Payment QR"
+                crossOrigin="anonymous"
+                style={{ width: '100px', height: '100px', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+              />
+              <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '4px' }}>Scan to Pay</div>
+              {settings.qrType === 'upi' && settings.upiId && (
+                <div style={{ fontSize: '9px', color: '#9ca3af', marginTop: '2px' }}>{settings.upiId}</div>
+              )}
             </div>
+          ) : (
+            <div /> /* placeholder for layout */
+          )}
+
+          <div style={{ textAlign: 'right' }}>
+            {/* Signature */}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ width: '100px', borderBottom: '1px solid #374151', marginBottom: '4px', height: '28px', marginLeft: 'auto' }} />
+              <div style={{ fontSize: '10px', color: '#6b7280' }}>Owner Signature</div>
+            </div>
+            {/* Status */}
             <div style={{ display: 'inline-block', padding: '3px 12px', borderRadius: '20px',
               fontWeight: 700, fontSize: '11px', background: statusStyle.bg,
               color: statusStyle.color, border: `1px solid ${statusStyle.border}` }}>
               {statusStyle.label}
             </div>
+            <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '6px' }}>
+              {new Date().toLocaleDateString('en-IN')}
+            </div>
           </div>
         </div>
+
+        {/* Notes */}
+        {p.notes && (
+          <div style={{ marginTop: '12px', padding: '8px 10px', background: '#fafafa', borderRadius: '6px', fontSize: '11px', color: '#6b7280' }}>
+            <strong>Note:</strong> {p.notes}
+          </div>
+        )}
       </div>
 
-      {/* Payment Timeline (for new records) */}
+      {/* Payment Timeline */}
       {transactions.length > 0 && (
         <div className="mt-5">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Payment History</p>

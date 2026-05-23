@@ -1,82 +1,84 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
-  headers: { 'Content-Type': 'application/json' },
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  timeout: 15000,
 });
 
-// Attach JWT token to every request
+// Attach token from localStorage on each request
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('rf_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  const token = localStorage.getItem('token');
+  if (token) config.headers['Authorization'] = `Bearer ${token}`;
   return config;
 });
 
-// Global response error handling
+// Global error interceptor
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('rf_token');
-      localStorage.removeItem('rf_user');
-      window.location.href = '/login';
+      localStorage.removeItem('token');
+      delete api.defaults.headers.common['Authorization'];
+      if (window.location.pathname !== '/login') window.location.href = '/login';
     }
     return Promise.reject(err);
   }
 );
 
-// ── Auth ───────────────────────────────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────────────────────
 export const authAPI = {
-  register:       (data) => api.post('/auth/register', data),
-  login:          (data) => api.post('/auth/login', data),
-  getMe:          ()     => api.get('/auth/me'),
-  changePassword: (data) => api.put('/auth/password', data),
+  register:   (d) => api.post('/auth/register', d),
+  verifyOTP:  (d) => api.post('/auth/verify-otp', d),
+  resendOTP:  (d) => api.post('/auth/resend-otp', d),
+  login:      (d) => api.post('/auth/login', d),
+  getMe:      ()  => api.get('/auth/me'),
+  changePassword: (d) => api.put('/auth/password', d),
 };
 
-// ── Areas ──────────────────────────────────────────────────────────────────────
+// ── Areas ─────────────────────────────────────────────────────────────────────
 export const areasAPI = {
-  getAll:  ()         => api.get('/areas'),
-  create:  (data)     => api.post('/areas', data),
-  update:  (id, data) => api.put(`/areas/${id}`, data),
-  remove:  (id)       => api.delete(`/areas/${id}`),
+  getAll:  ()       => api.get('/areas'),
+  create:  (d)      => api.post('/areas', d),
+  update:  (id, d)  => api.put(`/areas/${id}`, d),
+  delete:  (id)     => api.delete(`/areas/${id}`),
+  remove:  (id)     => api.delete(`/areas/${id}`),
 };
 
-// ── Houses ─────────────────────────────────────────────────────────────────────
+// ── Houses ────────────────────────────────────────────────────────────────────
 export const housesAPI = {
-  getAll:  (areaId)   => api.get('/houses', { params: { area: areaId } }),
-  getOne:  (id)       => api.get(`/houses/${id}`),
-  create:  (data)     => api.post('/houses', data),
-  update:  (id, data) => api.put(`/houses/${id}`, data),
-  remove:  (id)       => api.delete(`/houses/${id}`),
-  vacate:  (id)       => api.post(`/houses/${id}/vacate`),
+  getAll:  (p)      => api.get('/houses', { params: typeof p === 'string' ? { area: p } : p }),
+  getOne:  (id)     => api.get(`/houses/${id}`),
+  create:  (d)      => api.post('/houses', d),
+  update:  (id, d)  => api.put(`/houses/${id}`, d),
+  delete:  (id)     => api.delete(`/houses/${id}`),
+  remove:  (id)     => api.delete(`/houses/${id}`),
+  vacate:  (id)     => api.post(`/houses/${id}/vacate`),
+  getDue:  (id)     => api.get(`/houses/${id}/due`),
 };
 
-// ── Rent Records (new primary API) ─────────────────────────────────────────────
+// ── Rent Records ──────────────────────────────────────────────────────────────
 export const rentRecordsAPI = {
-  dashboard:    ()             => api.get('/rent-records/dashboard'),
-  getAll:       (params)       => api.get('/rent-records', { params }),
-  getOne:       (id)           => api.get(`/rent-records/${id}`),
-  create:       (data)         => api.post('/rent-records', data),
-  update:       (id, data)     => api.put(`/rent-records/${id}`, data),
-  remove:       (id)           => api.delete(`/rent-records/${id}`),
-  // Payment transactions
-  addPayment:   (id, data)     => api.post(`/rent-records/${id}/payments`, data),
-  removePayment:(id, txnId)    => api.delete(`/rent-records/${id}/payments/${txnId}`),
+  getAll:        (p)         => api.get('/rent-records', { params: p }),
+  getOne:        (id)        => api.get(`/rent-records/${id}`),
+  create:        (d)         => api.post('/rent-records', d),
+  update:        (id, d)     => api.put(`/rent-records/${id}`, d),
+  delete:        (id)        => api.delete(`/rent-records/${id}`),
+  remove:        (id)        => api.delete(`/rent-records/${id}`),
+  addPayment:    (id, d)     => api.post(`/rent-records/${id}/payments`, d),
+  deletePayment: (id, txnId) => api.delete(`/rent-records/${id}/payments/${txnId}`),
+  removePayment: (id, txnId) => api.delete(`/rent-records/${id}/payments/${txnId}`),
+  getDashboard:  (p)         => api.get('/rent-records/dashboard', { params: p }),
+  dashboard:     (p)         => api.get('/rent-records/dashboard', { params: p }),
 };
 
-// ── Settings ───────────────────────────────────────────────────────────────────
-export const settingsAPI = {
-  get:    ()     => api.get('/settings'),
-  update: (data) => api.put('/settings', data),
-};
-
-// ── Legacy payments (kept for backward compat) ─────────────────────────────────
 export const paymentsAPI = {
-  dashboard: ()         => api.get('/rent-records/dashboard'), // redirect to new
-  getAll:    (params)   => api.get('/rent-records', { params }),
-  getOne:    (id)       => api.get(`/rent-records/${id}`),
-  create:    (data)     => api.post('/payments', data),
-  remove:    (id)       => api.delete(`/payments/${id}`),
+  create: (d) => api.post('/payments', d),
+};
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+export const settingsAPI = {
+  get:    ()  => api.get('/settings'),
+  update: (d) => api.put('/settings', d),
 };
 
 export default api;

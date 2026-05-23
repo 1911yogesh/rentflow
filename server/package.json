@@ -1,6 +1,6 @@
 {
   "name": "rentflux-server",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "RentFlux - Rent Management System Backend",
   "main": "index.js",
   "scripts": {
@@ -15,7 +15,8 @@
     "express-validator": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.4.1",
-    "mongoose-paginate-v2": "^1.8.3"
+    "mongoose-paginate-v2": "^1.8.3",
+    "nodemailer": "^6.9.13"
   },
   "devDependencies": {
     "nodemon": "^3.1.3"

@@ -7,11 +7,16 @@ const userSchema = new mongoose.Schema(
     email:    { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true, minlength: 6, select: false },
     role:     { type: String, enum: ['admin', 'viewer'], default: 'admin' },
+
+    // Email OTP verification
+    isVerified:   { type: Boolean, default: false },
+    otp:          { type: String, select: false },
+    otpExpiry:    { type: Date, select: false },
+    otpAttempts:  { type: Number, default: 0, select: false },
   },
   { timestamps: true }
 );
 
-// Hash password before save
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   const salt = await bcrypt.genSalt(10);
@@ -19,7 +24,6 @@ userSchema.pre('save', async function (next) {
   next();
 });
 
-// Compare plain password with hashed
 userSchema.methods.matchPassword = async function (plain) {
   return bcrypt.compare(plain, this.password);
 };

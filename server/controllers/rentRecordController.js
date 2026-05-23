@@ -1,21 +1,38 @@
-const RentRecord          = require('../models/RentRecord');
-const PaymentTransaction  = require('../models/PaymentTransaction');
-const House               = require('../models/House');
+const RentRecord         = require('../models/RentRecord');
+const PaymentTransaction = require('../models/PaymentTransaction');
+const House              = require('../models/House');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Recompute totalPaid + status for a RentRecord from its transactions.
- * Saves the record.  Returns updated record.
- */
+function buildOverrideField(auto, override) {
+  const autoVal = parseFloat(auto) || 0;
+  if (override !== undefined && override !== null && override !== '') {
+    const fin = parseFloat(override);
+    return { auto: autoVal, final: isNaN(fin) ? autoVal : fin, overridden: true };
+  }
+  return { auto: autoVal, final: autoVal, overridden: false };
+}
+
+function getPrevMonth(month) {
+  const [y, m] = month.split('-').map(Number);
+  const d = new Date(y, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Generate a receipt ID like RF-202505-0042 */
+function genReceiptId(month, count) {
+  const m = month.replace('-', '');
+  const n = String(count).padStart(4, '0');
+  return `RF-${m}-${n}`;
+}
+
 async function syncRecordStatus(recordId) {
   const txns = await PaymentTransaction.find({ rentRecord: recordId }).lean();
   const totalPaid = txns.reduce((s, t) => s + t.amount, 0);
   const record    = await RentRecord.findById(recordId);
   if (!record) return null;
-
   record.totalPaid = totalPaid;
   const remaining  = record.totalAmount - totalPaid;
   record.status    = remaining <= 0 ? 'paid' : totalPaid > 0 ? 'partial' : 'unpaid';
@@ -23,22 +40,18 @@ async function syncRecordStatus(recordId) {
   return record;
 }
 
-/**
- * Build a populated record with transactions attached.
- */
 async function populatedRecord(recordId) {
   const record = await RentRecord.findById(recordId)
     .populate({ path: 'house', populate: { path: 'area', select: 'name city' } })
     .lean();
   if (!record) return null;
   const transactions = await PaymentTransaction.find({ rentRecord: recordId })
-    .sort({ paymentDate: 1 })
-    .lean();
+    .sort({ paymentDate: 1 }).lean();
   return { ...record, transactions };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/rent-records  — list, filterable
+// GET /api/rent-records
 // ─────────────────────────────────────────────────────────────────────────────
 exports.getRecords = async (req, res) => {
   try {
@@ -48,15 +61,14 @@ exports.getRecords = async (req, res) => {
     if (month)  filter.month  = month;
     if (status) filter.status = status;
 
-    const skip   = (parseInt(page) - 1) * parseInt(limit);
-    const total  = await RentRecord.countDocuments(filter);
-    const docs   = await RentRecord.find(filter)
+    const skip  = (parseInt(page) - 1) * parseInt(limit);
+    const total = await RentRecord.countDocuments(filter);
+    const docs  = await RentRecord.find(filter)
       .sort({ month: -1, createdAt: -1 })
       .skip(skip).limit(parseInt(limit))
       .populate({ path: 'house', populate: { path: 'area', select: 'name city' } })
       .lean();
 
-    // Attach transactions to each
     const ids = docs.map((d) => d._id);
     const allTxns = await PaymentTransaction.find({ rentRecord: { $in: ids } }).lean();
     const txnMap  = {};
@@ -92,12 +104,11 @@ exports.getRecord = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/rent-records  — Generate slip (NO payment collected here)
+// POST /api/rent-records  — Generate slip
 // ─────────────────────────────────────────────────────────────────────────────
 exports.createRecord = async (req, res) => {
   try {
-    const { houseId, month, currReading, notes,
-            overrides = {} } = req.body;
+    const { houseId, month, currReading, notes, overrides = {} } = req.body;
 
     const house = await House.findOne({ _id: houseId, owner: req.user._id });
     if (!house) return res.status(404).json({ success: false, message: 'House not found' });
@@ -106,7 +117,7 @@ exports.createRecord = async (req, res) => {
     const exists = await RentRecord.findOne({ house: houseId, month });
     if (exists) return res.status(400).json({ success: false, message: `Slip for ${month} already exists` });
 
-    // ── Previous due: dynamically computed from last month's record ──────────
+    // Previous due
     const prevMonth = getPrevMonth(month);
     let prevDueAuto = 0;
     const prevRecord = await RentRecord.findOne({ house: houseId, month: prevMonth });
@@ -118,23 +129,44 @@ exports.createRecord = async (req, res) => {
       prevDueAuto = house.prevDue || 0;
     }
 
-    // ── Electricity ───────────────────────────────────────────────────────────
+    // ── Electricity: support both per_unit and fixed ───────────────────────
+    const elecType    = house.elecType || 'per_unit';
     const prevReading = house.prevReading || 0;
-    const curr        = parseFloat(currReading) || 0;
-    const units       = Math.max(0, curr - prevReading);
-    const elecAuto    = parseFloat((units * house.elecPerUnit).toFixed(2));
+    let elecAuto = 0, units = 0, curr = 0, perUnit = 0, elecFixed = 0;
 
-    // ── Build override fields ─────────────────────────────────────────────────
+    if (elecType === 'fixed') {
+      elecAuto  = house.elecFixed || 0;
+      elecFixed = house.elecFixed || 0;
+    } else {
+      curr      = parseFloat(currReading) || 0;
+      if (curr < prevReading) {
+        return res.status(400).json({
+          success: false,
+          message: `Current reading (${curr}) cannot be less than previous reading (${prevReading})`,
+        });
+      }
+      units     = Math.max(0, curr - prevReading);
+      perUnit   = house.elecPerUnit || 0;
+      elecAuto  = parseFloat((units * perUnit).toFixed(2));
+    }
+
+    // If per_unit mode and no reading provided, skip electricity
+    if (elecType === 'per_unit' && !currReading)
+      return res.status(400).json({ success: false, message: 'Current meter reading is required' });
+
+    // Build fields
     const roomRentField    = buildOverrideField(house.roomRent  || 0, overrides.roomRent);
     const waterBillField   = buildOverrideField(house.waterBill || 0, overrides.waterBill);
     const elecBillField    = buildOverrideField(elecAuto,             overrides.elecBill);
-    const previousDueField = buildOverrideField(prevDueAuto,         overrides.previousDue);
+    const previousDueField = buildOverrideField(prevDueAuto,          overrides.previousDue);
 
     const totalAmount =
-      roomRentField.final  +
-      waterBillField.final +
-      elecBillField.final  +
-      previousDueField.final;
+      roomRentField.final + waterBillField.final +
+      elecBillField.final + previousDueField.final;
+
+    // Receipt ID: count existing records for this owner+month to get sequence
+    const count = await RentRecord.countDocuments({ owner: req.user._id, month }) + 1;
+    const receiptId = genReceiptId(month, count);
 
     const record = await RentRecord.create({
       house:       houseId,
@@ -144,30 +176,36 @@ exports.createRecord = async (req, res) => {
       waterBill:   waterBillField,
       elecBill:    elecBillField,
       previousDue: previousDueField,
+      elecType,
       prevReading,
       currReading: curr,
       units,
-      perUnit:     house.elecPerUnit,
+      perUnit,
+      elecFixed,
       totalAmount,
-      status:      'unpaid',
-      totalPaid:   0,
-      notes:       notes || '',
+      status:   'unpaid',
+      totalPaid: 0,
+      notes:     notes || '',
+      receiptId,
     });
 
-    // ── Roll meter forward on house ───────────────────────────────────────────
-    await House.findByIdAndUpdate(houseId, { prevReading: curr, currReading: curr });
+    // Roll meter forward (only for per_unit)
+    if (elecType === 'per_unit') {
+      await House.findByIdAndUpdate(houseId, { prevReading: curr, currReading: curr });
+    }
 
     const populated = await populatedRecord(record._id);
     res.status(201).json({ success: true, data: populated });
   } catch (err) {
-    if (err.code === 11000) return res.status(400).json({ success: false, message: 'Slip already exists for this month' });
+    if (err.code === 11000)
+      return res.status(400).json({ success: false, message: 'Slip already exists for this month' });
     console.error('createRecord:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUT /api/rent-records/:id  — Edit slip (with safe recalculation)
+// PUT /api/rent-records/:id
 // ─────────────────────────────────────────────────────────────────────────────
 exports.updateRecord = async (req, res) => {
   try {
@@ -176,40 +214,42 @@ exports.updateRecord = async (req, res) => {
 
     const { currReading, overrides = {}, notes } = req.body;
 
-    // Recompute electricity if reading changed
-    if (currReading !== undefined) {
-      const curr      = parseFloat(currReading) || 0;
-      const units     = Math.max(0, curr - record.prevReading);
-      const elecAuto  = parseFloat((units * record.perUnit).toFixed(2));
+    if (currReading !== undefined && record.elecType === 'per_unit') {
+      const curr     = parseFloat(currReading) || 0;
+      if (curr < record.prevReading) {
+        return res.status(400).json({
+          success: false,
+          message: `Current reading (${curr}) cannot be less than previous reading (${record.prevReading})`,
+        });
+      }
+      const units    = Math.max(0, curr - record.prevReading);
+      const elecAuto = parseFloat((units * record.perUnit).toFixed(2));
       record.currReading = curr;
       record.units       = units;
-      record.elecBill    = buildOverrideField(elecAuto, overrides.elecBill !== undefined ? overrides.elecBill : (record.elecBill.overridden ? record.elecBill.final : undefined));
+      record.elecBill    = buildOverrideField(
+        elecAuto,
+        overrides.elecBill !== undefined ? overrides.elecBill
+          : (record.elecBill.overridden ? record.elecBill.final : undefined)
+      );
     }
 
-    // Apply other overrides
     if (overrides.roomRent    !== undefined) record.roomRent    = buildOverrideField(record.roomRent.auto,    overrides.roomRent);
     if (overrides.waterBill   !== undefined) record.waterBill   = buildOverrideField(record.waterBill.auto,   overrides.waterBill);
     if (overrides.elecBill    !== undefined && currReading === undefined)
       record.elecBill = buildOverrideField(record.elecBill.auto, overrides.elecBill);
     if (overrides.previousDue !== undefined) record.previousDue = buildOverrideField(record.previousDue.auto, overrides.previousDue);
-
     if (notes !== undefined) record.notes = notes;
 
-    // Recompute total
     record.totalAmount =
-      record.roomRent.final    +
-      record.waterBill.final   +
-      record.elecBill.final    +
-      record.previousDue.final;
+      record.roomRent.final + record.waterBill.final +
+      record.elecBill.final + record.previousDue.final;
 
-    // Resync status
-    const txns      = await PaymentTransaction.find({ rentRecord: record._id }).lean();
-    record.totalPaid = txns.reduce((s, t) => s + t.amount, 0);
-    const remaining  = record.totalAmount - record.totalPaid;
-    record.status    = remaining <= 0 ? 'paid' : record.totalPaid > 0 ? 'partial' : 'unpaid';
+    const txns       = await PaymentTransaction.find({ rentRecord: record._id }).lean();
+    record.totalPaid  = txns.reduce((s, t) => s + t.amount, 0);
+    const remaining   = record.totalAmount - record.totalPaid;
+    record.status     = remaining <= 0 ? 'paid' : record.totalPaid > 0 ? 'partial' : 'unpaid';
 
     await record.save();
-
     const populated = await populatedRecord(record._id);
     res.json({ success: true, data: populated });
   } catch (err) {
@@ -234,7 +274,7 @@ exports.deleteRecord = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/rent-records/:id/payments  — Add a payment transaction
+// POST /api/rent-records/:id/payments
 // ─────────────────────────────────────────────────────────────────────────────
 exports.addPayment = async (req, res) => {
   try {
@@ -244,20 +284,26 @@ exports.addPayment = async (req, res) => {
     const { amount, paymentDate, paymentMethod = 'cash', note = '' } = req.body;
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) return res.status(400).json({ success: false, message: 'Invalid payment amount' });
+    const remaining = Math.max(0, record.totalAmount - (record.totalPaid || 0));
+    if (remaining <= 0) return res.status(400).json({ success: false, message: 'This rent slip is already fully paid' });
+    if (amt > remaining) {
+      return res.status(400).json({
+        success: false,
+        message: `Payment cannot exceed remaining due (${remaining})`,
+      });
+    }
 
     const txn = await PaymentTransaction.create({
       rentRecord:    record._id,
       house:         record.house,
       owner:         req.user._id,
       amount:        amt,
-      paymentDate:   paymentDate ? new Date(paymentDate) : new Date(),
+      paymentDate:   paymentDate || new Date(),
       paymentMethod,
       note,
     });
 
-    // Sync status on the rent record
     await syncRecordStatus(record._id);
-
     const populated = await populatedRecord(record._id);
     res.status(201).json({ success: true, data: populated, transaction: txn });
   } catch (err) {
@@ -267,19 +313,19 @@ exports.addPayment = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DELETE /api/rent-records/:id/payments/:txnId  — Remove a transaction
+// DELETE /api/rent-records/:id/payments/:txnId
 // ─────────────────────────────────────────────────────────────────────────────
 exports.deletePayment = async (req, res) => {
   try {
     const record = await RentRecord.findOne({ _id: req.params.id, owner: req.user._id });
     if (!record) return res.status(404).json({ success: false, message: 'Record not found' });
 
-    const txn = await PaymentTransaction.findOne({ _id: req.params.txnId, rentRecord: record._id });
+    const txn = await PaymentTransaction.findOneAndDelete({
+      _id: req.params.txnId, rentRecord: record._id, owner: req.user._id,
+    });
     if (!txn) return res.status(404).json({ success: false, message: 'Transaction not found' });
 
-    await txn.deleteOne();
     await syncRecordStatus(record._id);
-
     const populated = await populatedRecord(record._id);
     res.json({ success: true, data: populated });
   } catch (err) {
@@ -288,64 +334,62 @@ exports.deletePayment = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/rent-records/dashboard
+// GET /api/rent-records/dashboard  — Stats
 // ─────────────────────────────────────────────────────────────────────────────
-exports.getDashboard = async (req, res) => {
+exports.getDashboardStats = async (req, res) => {
   try {
-    const now   = new Date();
-    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const owner = req.user._id;
+    const { month } = req.query;
+    const currentMonth = month || new Date().toISOString().slice(0, 7);
 
-    const [thisMonthRecords, allHouses] = await Promise.all([
-      RentRecord.find({ owner: req.user._id, month })
-        .populate({ path: 'house', select: 'tenantName number area' })
+    const [allRecords, monthRecords, allHouses] = await Promise.all([
+      RentRecord.find({ owner }).lean(),
+      RentRecord.find({ owner, month: currentMonth })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate({ path: 'house', populate: { path: 'area', select: 'name city' } })
         .lean(),
-      House.find({ owner: req.user._id }).lean(),
+      require('../models/House').find({ owner }).lean(),
     ]);
 
-    const collected  = thisMonthRecords.reduce((s, r) => s + (r.totalPaid || 0), 0);
-    const pending    = thisMonthRecords.reduce((s, r) => s + Math.max(0, r.totalAmount - (r.totalPaid || 0)), 0);
-    const occupied   = allHouses.filter((h) => h.status === 'occupied').length;
-    const vacant     = allHouses.filter((h) => h.status === 'vacant').length;
+    const totalCollected = allRecords.reduce((s, r) => s + r.totalPaid, 0);
+    const totalDue       = allRecords.reduce((s, r) => s + Math.max(0, r.totalAmount - r.totalPaid), 0);
 
-    // Compute total outstanding (across ALL months, not just current)
-    const allUnpaid = await RentRecord.find({ owner: req.user._id, status: { $in: ['unpaid', 'partial'] } }).lean();
-    const totalDue  = allUnpaid.reduce((s, r) => s + Math.max(0, r.totalAmount - (r.totalPaid || 0)), 0);
+    const currentMonthRecords = allRecords.filter((r) => r.month === currentMonth);
+    const monthPaid    = currentMonthRecords.filter(r => r.status === 'paid').length;
+    const monthPartial = currentMonthRecords.filter(r => r.status === 'partial').length;
+    const monthUnpaid  = currentMonthRecords.filter(r => r.status === 'unpaid').length;
+    const monthTotal   = currentMonthRecords.reduce((s, r) => s + r.totalAmount, 0);
+    const monthCollected = currentMonthRecords.reduce((s, r) => s + r.totalPaid, 0);
+    const occupied = allHouses.filter(h => h.status === 'occupied').length;
+    const vacant = allHouses.filter(h => h.status === 'vacant').length;
 
     res.json({
       success: true,
       data: {
-        month,
-        collected,
-        pending,
+        collected: monthCollected,
+        totalCollected,
         totalDue,
         occupied,
+        occupiedHouses: occupied,
         vacant,
-        totalHouses:    allHouses.length,
-        recentRecords:  thisMonthRecords.slice(0, 5),
+        vacantHouses: vacant,
+        totalHouses: allHouses.length,
+        recentRecords: monthRecords,
+        month: {
+          month: currentMonth,
+          total: monthTotal,
+          collected: monthCollected,
+          due: monthTotal - monthCollected,
+          paid: monthPaid,
+          partial: monthPartial,
+          unpaid: monthUnpaid,
+          slips: currentMonthRecords.length,
+        },
       },
     });
   } catch (err) {
-    console.error('getDashboard:', err);
+    console.error('getDashboardStats:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// INTERNAL HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
-function buildOverrideField(autoVal, overrideVal) {
-  const a = parseFloat(autoVal) || 0;
-  if (overrideVal !== undefined && overrideVal !== null && overrideVal !== '') {
-    const f = parseFloat(overrideVal);
-    if (!isNaN(f) && f !== a) {
-      return { auto: a, final: f, overridden: true };
-    }
-  }
-  return { auto: a, final: a, overridden: false };
-}
-
-function getPrevMonth(month) {
-  const [y, m] = month.split('-').map(Number);
-  if (m === 1) return `${y - 1}-12`;
-  return `${y}-${String(m - 1).padStart(2, '0')}`;
-}
