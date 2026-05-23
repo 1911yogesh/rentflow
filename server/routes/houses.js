@@ -1,7 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
 const {
-  getHouses, getHouse, createHouse, updateHouse, deleteHouse, vacateHouse,
+  getHouses, getHouse, createHouse, updateHouse, deleteHouse, vacateHouse, getHouseDue,
 } = require('../controllers/houseController');
 const { protect } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
@@ -27,5 +27,6 @@ router.post(
 router.put('/:id', updateHouse);
 router.delete('/:id', deleteHouse);
 router.post('/:id/vacate', vacateHouse);
+router.get('/:id/due', getHouseDue);
 
 module.exports = router;

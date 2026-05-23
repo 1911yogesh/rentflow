@@ -107,3 +107,32 @@ exports.vacateHouse = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+// ── GET /api/houses/:id/due ────────────────────────────────────────────────────
+// Returns dynamically-computed remaining due for a house (from RentRecord system)
+exports.getHouseDue = async (req, res) => {
+  try {
+    const RentRecord         = require('../models/RentRecord');
+    const PaymentTransaction = require('../models/PaymentTransaction');
+
+    const house = await House.findOne({ _id: req.params.id, owner: req.user._id });
+    if (!house) return res.status(404).json({ success: false, message: 'House not found' });
+
+    // Find the most recent unpaid/partial record
+    const lastRecord = await RentRecord.findOne({
+      house: house._id,
+      status: { $in: ['unpaid', 'partial'] },
+    }).sort({ month: -1 });
+
+    let currentDue = 0;
+    if (lastRecord) {
+      const txns = await PaymentTransaction.find({ rentRecord: lastRecord._id }).lean();
+      const paid = txns.reduce((s, t) => s + t.amount, 0);
+      currentDue = Math.max(0, lastRecord.totalAmount - paid);
+    }
+
+    res.json({ success: true, data: { due: currentDue } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

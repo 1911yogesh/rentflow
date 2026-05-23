@@ -25,10 +25,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/areas', require('./routes/areas'));
-app.use('/api/houses', require('./routes/houses'));
-app.use('/api/payments', require('./routes/payments'));
+app.use('/api/auth',         require('./routes/auth'));
+app.use('/api/areas',        require('./routes/areas'));
+app.use('/api/houses',       require('./routes/houses'));
+app.use('/api/payments',     require('./routes/payments'));      // legacy — kept for backward compat
+app.use('/api/rent-records', require('./routes/rentRecords'));   // new primary records API
+app.use('/api/settings',     require('./routes/settings'));       // app settings
 
 // ── Health check ───────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) =>
