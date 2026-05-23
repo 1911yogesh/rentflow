@@ -1,15 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { housesAPI } from '../services/api';
 import { Modal, FormGroup } from '../components/UI';
 
 const TenantModal = ({ open, onClose, onSave, house }) => {
+  const isEditing = !!(house?.tenantName);
+
   const [form, setForm] = useState({
     tenantName: '', phone: '', altPhone: '', aadhaar: '',
     address: '', joinDate: new Date().toISOString().split('T')[0],
     deposit: '', prevReading: '0',
   });
   const [loading, setLoading] = useState(false);
+
+  // Pre-fill form with existing tenant details when editing
+  useEffect(() => {
+    if (open && house) {
+      setForm({
+        tenantName:  house.tenantName  || '',
+        phone:       house.phone       || '',
+        altPhone:    house.altPhone    || '',
+        aadhaar:     house.aadhaar     || '',
+        address:     house.address     || '',
+        joinDate:    house.joinDate
+                       ? new Date(house.joinDate).toISOString().split('T')[0]
+                       : new Date().toISOString().split('T')[0],
+        deposit:     house.deposit     != null ? String(house.deposit)     : '',
+        prevReading: house.prevReading != null ? String(house.prevReading) : '0',
+      });
+    }
+  }, [open, house?._id]);
 
   const handle = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -26,16 +46,17 @@ const TenantModal = ({ open, onClose, onSave, house }) => {
         aadhaar:     form.aadhaar.trim(),
         address:     form.address.trim(),
         joinDate:    form.joinDate || undefined,
-        deposit:     Number(form.deposit) || 0,
+        deposit:     Number(form.deposit)     || 0,
         prevReading: Number(form.prevReading) || 0,
-        currReading: Number(form.prevReading) || 0,
-        status:      'occupied',
+        // Only reset currReading to prevReading when adding a brand-new tenant
+        ...(isEditing ? {} : { currReading: Number(form.prevReading) || 0 }),
+        status: 'occupied',
       });
-      toast.success('Tenant added');
+      toast.success(isEditing ? 'Tenant details updated' : 'Tenant added');
       onSave();
       onClose();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to add tenant');
+      toast.error(err?.response?.data?.message || 'Failed to save tenant');
     } finally {
       setLoading(false);
     }
@@ -44,13 +65,13 @@ const TenantModal = ({ open, onClose, onSave, house }) => {
   return (
     <Modal
       open={open} onClose={onClose}
-      title={`Add Tenant — ${house?.number || ''}`}
+      title={isEditing ? `Edit Tenant — ${house?.number || ''}` : `Add Tenant — ${house?.number || ''}`}
       size="lg"
       footer={
         <>
           <button className="btn btn-secondary" type="button" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" onClick={submit} disabled={loading}>
-            {loading ? 'Saving…' : 'Add Tenant'}
+            {loading ? 'Saving…' : isEditing ? 'Update Tenant' : 'Add Tenant'}
           </button>
         </>
       }

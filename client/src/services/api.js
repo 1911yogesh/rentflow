@@ -5,14 +5,14 @@ const api = axios.create({
   timeout: 15000,
 });
 
-// Attach token from localStorage on each request
+// Attach token from localStorage on each request (persistent login)
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) config.headers['Authorization'] = `Bearer ${token}`;
   return config;
 });
 
-// Global error interceptor
+// Global error interceptor — auto-logout on 401
 api.interceptors.response.use(
   (res) => res,
   (err) => {
@@ -27,12 +27,15 @@ api.interceptors.response.use(
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const authAPI = {
-  register:   (d) => api.post('/auth/register', d),
-  verifyOTP:  (d) => api.post('/auth/verify-otp', d),
-  resendOTP:  (d) => api.post('/auth/resend-otp', d),
-  login:      (d) => api.post('/auth/login', d),
-  getMe:      ()  => api.get('/auth/me'),
+  register:       (d) => api.post('/auth/register', d),
+  // OTP functionality temporarily disabled for future release
+  verifyOTP:      (d) => api.post('/auth/verify-otp', d),
+  resendOTP:      (d) => api.post('/auth/resend-otp', d),
+  login:          (d) => api.post('/auth/login', d),
+  getMe:          ()  => api.get('/auth/me'),
   changePassword: (d) => api.put('/auth/password', d),
+  forgotPassword: (d) => api.post('/auth/forgot-password', d),
+  resetPassword:  (token, d) => api.post(`/auth/reset-password/${token}`, d),
 };
 
 // ── Areas ─────────────────────────────────────────────────────────────────────

@@ -8,11 +8,15 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true, minlength: 6, select: false },
     role:     { type: String, enum: ['admin', 'viewer'], default: 'admin' },
 
-    // Email OTP verification
+    // Email OTP verification (OTP functionality temporarily disabled for future release)
     isVerified:   { type: Boolean, default: false },
     otp:          { type: String, select: false },
     otpExpiry:    { type: Date, select: false },
     otpAttempts:  { type: Number, default: 0, select: false },
+
+    // Forgot Password — secure token-based reset
+    passwordResetToken:  { type: String, select: false },
+    passwordResetExpiry: { type: Date, select: false },
   },
   { timestamps: true }
 );
