@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { SettingsProvider } from './context/SettingsContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout    from './components/Layout';
 import Login     from './pages/Login';
@@ -14,31 +15,33 @@ import Settings  from './pages/Settings';
 
 const App = () => (
   <AuthProvider>
-    <Routes>
-      {/* Public */}
-      <Route path="/login"    element={<Login />} />
-      <Route path="/register" element={<Register />} />
+    <SettingsProvider>
+      <Routes>
+        {/* Public */}
+        <Route path="/login"    element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-      {/* Protected – wrapped in Layout */}
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index                      element={<Dashboard />} />
-        <Route path="areas"               element={<Areas />} />
-        <Route path="areas/:areaId/houses" element={<Houses />} />
-        <Route path="history"             element={<History />} />
-        <Route path="slips"               element={<Slips />} />
-        <Route path="settings"            element={<Settings />} />
-      </Route>
+        {/* Protected – wrapped in Layout */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index                      element={<Dashboard />} />
+          <Route path="areas"               element={<Areas />} />
+          <Route path="areas/:areaId/houses" element={<Houses />} />
+          <Route path="history"             element={<History />} />
+          <Route path="slips"               element={<Slips />} />
+          <Route path="settings"            element={<Settings />} />
+        </Route>
 
-      {/* Fallback */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </SettingsProvider>
   </AuthProvider>
 );
 

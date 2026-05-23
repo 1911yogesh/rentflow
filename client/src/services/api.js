@@ -51,11 +51,30 @@ export const housesAPI = {
   vacate:  (id)       => api.post(`/houses/${id}/vacate`),
 };
 
-// ── Payments ───────────────────────────────────────────────────────────────────
+// ── Rent Records (new primary API) ─────────────────────────────────────────────
+export const rentRecordsAPI = {
+  dashboard:    ()             => api.get('/rent-records/dashboard'),
+  getAll:       (params)       => api.get('/rent-records', { params }),
+  getOne:       (id)           => api.get(`/rent-records/${id}`),
+  create:       (data)         => api.post('/rent-records', data),
+  update:       (id, data)     => api.put(`/rent-records/${id}`, data),
+  remove:       (id)           => api.delete(`/rent-records/${id}`),
+  // Payment transactions
+  addPayment:   (id, data)     => api.post(`/rent-records/${id}/payments`, data),
+  removePayment:(id, txnId)    => api.delete(`/rent-records/${id}/payments/${txnId}`),
+};
+
+// ── Settings ───────────────────────────────────────────────────────────────────
+export const settingsAPI = {
+  get:    ()     => api.get('/settings'),
+  update: (data) => api.put('/settings', data),
+};
+
+// ── Legacy payments (kept for backward compat) ─────────────────────────────────
 export const paymentsAPI = {
-  dashboard: ()         => api.get('/payments/dashboard'),
-  getAll:    (params)   => api.get('/payments', { params }),
-  getOne:    (id)       => api.get(`/payments/${id}`),
+  dashboard: ()         => api.get('/rent-records/dashboard'), // redirect to new
+  getAll:    (params)   => api.get('/rent-records', { params }),
+  getOne:    (id)       => api.get(`/rent-records/${id}`),
   create:    (data)     => api.post('/payments', data),
   remove:    (id)       => api.delete(`/payments/${id}`),
 };

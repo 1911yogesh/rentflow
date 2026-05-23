@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, TrendingUp, AlertCircle, Home, Key } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { paymentsAPI, areasAPI } from '../services/api';
+import { rentRecordsAPI, areasAPI } from '../services/api';
 import { fmtCurrency, monthLabel, currentMonthLabel, initials, statusColor } from '../utils/helpers';
 import { StatCard, CardSkeleton, EmptyState, SectionHeader } from '../components/UI';
 import AreaModal from '../modals/AreaModal';
@@ -18,7 +18,7 @@ const Dashboard = () => {
     setLoading(true);
     try {
       const [dashRes, areasRes] = await Promise.all([
-        paymentsAPI.dashboard(),
+        rentRecordsAPI.dashboard(),
         areasAPI.getAll(),
       ]);
       setStats(dashRes.data.data);
@@ -54,7 +54,7 @@ const Dashboard = () => {
             <StatCard
               label="Collected This Month" icon={<TrendingUp size={18} />}
               value={fmtCurrency(stats?.collected)} color="green"
-              sub={`${stats?.recentPayments?.length || 0} payments`}
+              sub={`${stats?.recentRecords?.length || 0} slips this month`}
             />
             <StatCard
               label="Total Pending Dues" icon={<AlertCircle size={18} />}
@@ -90,28 +90,28 @@ const Dashboard = () => {
           />
           {loading ? (
             <div className="space-y-3">{Array(4).fill(0).map((_, i) => <div key={i} className="skeleton h-12" />)}</div>
-          ) : stats?.recentPayments?.length ? (
+          ) : stats?.recentRecords?.length ? (
             <div className="divide-y divide-gray-50">
-              {stats.recentPayments.map((p) => (
-                <div key={p._id} className="flex items-center gap-3 py-3">
+              {stats.recentRecords.map((r) => (
+                <div key={r._id} className="flex items-center gap-3 py-3">
                   <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold shrink-0">
-                    {initials(p.house?.tenantName)}
+                    {initials(r.house?.tenantName)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate">{p.house?.tenantName}</p>
+                    <p className="font-semibold text-sm truncate">{r.house?.tenantName}</p>
                     <p className="text-xs text-gray-400">
-                      {p.house?.number} · {monthLabel(p.month)}
+                      {r.house?.number} · {monthLabel(r.month)}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="font-bold text-sm text-green-600">{fmtCurrency(p.paid)}</p>
-                    <span className={`badge ${statusColor(p.status)} text-[10px]`}>{p.status}</span>
+                    <p className="font-bold text-sm text-green-600">{fmtCurrency(r.totalPaid || 0)}</p>
+                    <span className={`badge ${statusColor(r.status)} text-[10px]`}>{r.status}</span>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <EmptyState icon="💳" title="No payments yet" description="Payments recorded this month will appear here" />
+            <EmptyState icon="💳" title="No slips yet" description="This month's rent slips will appear here" />
           )}
         </div>
 

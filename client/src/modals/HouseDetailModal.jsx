@@ -1,50 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { housesAPI, paymentsAPI } from '../services/api';
-import { Modal, Tabs, EmptyState, PageLoader } from '../components/UI';
-import {
-  fmtCurrency, fmtDate, monthLabel, statusColor, initials,
-} from '../utils/helpers';
-import TenantModal   from './TenantModal';
-import RentCalcModal from './RentCalcModal';
-import SlipModal     from './SlipModal';
+import { housesAPI, rentRecordsAPI } from '../services/api';
+import { Modal, EmptyState, PageLoader } from '../components/UI';
+import { fmtCurrency, fmtDate, monthLabel, statusColor, initials } from '../utils/helpers';
+import TenantModal              from './TenantModal';
+import RentSlipGenerateModal    from './RentSlipGenerateModal';
+import AddPaymentModal          from './AddPaymentModal';
+import EditSlipModal            from './EditSlipModal';
+import SlipModal                from './SlipModal';
+
+const METHOD_ICONS = { cash: '💵', upi: '📱', bank_transfer: '🏦', cheque: '📄', other: '🔄' };
 
 const HouseDetailModal = ({ open, onClose, onSave, house: initialHouse }) => {
   const [tab,        setTab]        = useState('info');
   const [house,      setHouse]      = useState(initialHouse);
-  const [payments,   setPayments]   = useState([]);
-  const [loadingPay, setLoadingPay] = useState(false);
-  const [tenantModal, setTenantModal] = useState(false);
-  const [rentModal,   setRentModal]   = useState(false);
-  const [slipPayment, setSlipPayment] = useState(null);
-  const [vacating,    setVacating]    = useState(false);
+  const [records,    setRecords]    = useState([]);
+  const [loading,    setLoading]    = useState(false);
+  const [vacating,   setVacating]   = useState(false);
 
-  // Refresh house & payments when opened
+  // Sub-modals
+  const [tenantModal,    setTenantModal]    = useState(false);
+  const [generateModal,  setGenerateModal]  = useState(false);
+  const [payModal,       setPayModal]       = useState(null);   // record to pay
+  const [editModal,      setEditModal]      = useState(null);   // record to edit
+  const [slipRecord,     setSlipRecord]     = useState(null);   // record to view slip
+
   useEffect(() => {
     if (!open || !initialHouse) return;
     setHouse(initialHouse);
     setTab('info');
-    loadPayments(initialHouse._id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadRecords(initialHouse._id);
   }, [open, initialHouse?._id]);
 
-  const loadPayments = async (houseId) => {
-    setLoadingPay(true);
+  const loadRecords = async (houseId) => {
+    setLoading(true);
     try {
-      const res = await paymentsAPI.getAll({ house: houseId, limit: 24 });
-      setPayments(res.data.data);
-    } catch {
-      /* ignore */
-    } finally {
-      setLoadingPay(false);
-    }
+      const res = await rentRecordsAPI.getAll({ house: houseId, limit: 24 });
+      setRecords(res.data.data);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
   };
 
-  const refreshHouse = async () => {
+  const refresh = async () => {
     try {
       const res = await housesAPI.getOne(house._id);
       setHouse(res.data.data);
-      loadPayments(house._id);
+      loadRecords(house._id);
       onSave();
     } catch { /* ignore */ }
   };
@@ -57,31 +58,41 @@ const HouseDetailModal = ({ open, onClose, onSave, house: initialHouse }) => {
       toast.success('House marked as vacant');
       onSave();
       onClose();
-    } catch {
-      toast.error('Failed to vacate house');
-    } finally {
-      setVacating(false);
-    }
+    } catch { toast.error('Failed to vacate'); }
+    finally { setVacating(false); }
+  };
+
+  const deleteRecord = async (record) => {
+    if (!window.confirm('Delete this rent slip and all its payments? This cannot be undone.')) return;
+    try {
+      await rentRecordsAPI.remove(record._id);
+      toast.success('Slip deleted');
+      refresh();
+    } catch { toast.error('Failed to delete slip'); }
+  };
+
+  const deletePayment = async (record, txnId) => {
+    if (!window.confirm('Remove this payment?')) return;
+    try {
+      await rentRecordsAPI.removePayment(record._id, txnId);
+      toast.success('Payment removed');
+      refresh();
+    } catch { toast.error('Failed to remove payment'); }
   };
 
   if (!house) return null;
-
   const isOccupied = house.status === 'occupied';
 
   return (
     <>
-      <Modal
-        open={open} onClose={onClose}
-        title=""
-        size="lg"
-      >
-        {/* Custom header inside body */}
+      <Modal open={open} onClose={onClose} title="" size="lg">
+        {/* Header */}
         <div className="flex items-center gap-3 mb-5 -mt-1">
           <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm shrink-0">
             {isOccupied ? initials(house.tenantName) : '🏠'}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="font-heading font-semibold text-lg leading-tight">
+            <h2 className="font-heading font-semibold text-lg">
               {isOccupied ? house.tenantName : `${house.number} — Vacant`}
             </h2>
             <p className="text-xs text-gray-400">{house.number}</p>
@@ -91,49 +102,50 @@ const HouseDetailModal = ({ open, onClose, onSave, house: initialHouse }) => {
           </span>
         </div>
 
-        <Tabs
-          active={tab}
-          onChange={setTab}
-          tabs={[
-            { key: 'info', label: 'Info' },
-            ...(isOccupied ? [{ key: 'rent', label: 'Rent Calc' }] : []),
-            { key: 'history', label: 'History' },
-          ]}
-        />
+        {/* Tabs */}
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-5">
+          {[
+            { key: 'info',    label: 'Info' },
+            ...(isOccupied ? [{ key: 'rent', label: 'Rent' }] : []),
+            { key: 'history', label: `History (${records.length})` },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                tab === key ? 'bg-white shadow text-gray-900' : 'text-gray-400 hover:text-gray-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-        {/* ── INFO TAB ────────────────────────────────────────────────── */}
+        {/* ── INFO TAB ──────────────────────────────────────────────────────── */}
         {tab === 'info' && (
           isOccupied ? (
             <div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 <InfoCard title="Tenant Details">
                   <InfoRow label="Phone"    value={`📞 ${house.phone}`} />
-                  {house.altPhone && <InfoRow label="Alt Phone" value={house.altPhone} />}
+                  {house.altPhone && <InfoRow label="Alt"    value={house.altPhone} />}
                   <InfoRow label="Joined"   value={fmtDate(house.joinDate)} />
                   <InfoRow label="Deposit"  value={fmtCurrency(house.deposit)} />
-                  {house.address && <InfoRow label="Address"  value={house.address} />}
+                  {house.aadhaar && <InfoRow label="Aadhaar" value={house.aadhaar} />}
                 </InfoCard>
-                <InfoCard title="Rent Configuration">
-                  <InfoRow label="Room Rent"    value={fmtCurrency(house.roomRent)} />
-                  <InfoRow label="Water Bill"   value={fmtCurrency(house.waterBill)} />
-                  <InfoRow label="Per Unit"     value={`₹${house.elecPerUnit}`} />
-                  <InfoRow label="Prev Reading" value={`${house.prevReading} units`} />
+                <InfoCard title="Rent Config">
+                  <InfoRow label="Room Rent"  value={fmtCurrency(house.roomRent)} />
+                  <InfoRow label="Water Bill" value={fmtCurrency(house.waterBill)} />
+                  <InfoRow label="Per Unit"   value={`₹${house.elecPerUnit}`} />
+                  <InfoRow label="Prev Meter" value={`${house.prevReading} units`} />
                 </InfoCard>
               </div>
-
-              {house.prevDue > 0 && (
-                <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4">
-                  <div>
-                    <p className="font-semibold text-red-700 text-sm">⚠️ Previous Due</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Carry-forward amount</p>
-                  </div>
-                  <p className="font-heading font-bold text-xl text-red-600">{fmtCurrency(house.prevDue)}</p>
-                </div>
-              )}
-
               <div className="flex gap-2 flex-wrap">
                 <button className="btn btn-primary" onClick={() => setTab('rent')}>
-                  🧮 Calculate Rent
+                  🧾 Generate Slip
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setTenantModal(true)}>
+                  ✏️ Edit Tenant
                 </button>
                 <button className="btn btn-danger btn-sm" onClick={vacate} disabled={vacating}>
                   {vacating ? 'Vacating…' : 'Mark Vacant'}
@@ -143,60 +155,41 @@ const HouseDetailModal = ({ open, onClose, onSave, house: initialHouse }) => {
           ) : (
             <EmptyState
               icon="🏠" title="House is Vacant"
-              description="Add a tenant to start managing rent for this house"
-              action={
-                <button className="btn btn-primary" onClick={() => setTenantModal(true)}>
-                  Add Tenant
-                </button>
-              }
+              description="Add a tenant to start managing rent"
+              action={<button className="btn btn-primary" onClick={() => setTenantModal(true)}>Add Tenant</button>}
             />
           )
         )}
 
-        {/* ── RENT CALC TAB ───────────────────────────────────────────── */}
+        {/* ── RENT TAB ──────────────────────────────────────────────────────── */}
         {tab === 'rent' && isOccupied && (
           <div className="text-center py-8">
-            <p className="text-4xl mb-3">🧮</p>
-            <p className="font-semibold text-gray-700 mb-1">Ready to Calculate Rent</p>
-            <p className="text-sm text-gray-400 mb-6">
-              Click below to open the rent calculator for {house.tenantName}
+            <p className="text-4xl mb-3">🧾</p>
+            <p className="font-semibold text-gray-700 mb-1">Generate Monthly Rent Slip</p>
+            <p className="text-sm text-gray-400 mb-6 max-w-xs mx-auto">
+              The slip records the bill. Collect payment separately using the "Add Payment" button.
             </p>
-            <button className="btn btn-primary" onClick={() => setRentModal(true)}>
-              Open Rent Calculator
+            <button className="btn btn-primary" onClick={() => setGenerateModal(true)}>
+              Generate Slip
             </button>
           </div>
         )}
 
-        {/* ── HISTORY TAB ─────────────────────────────────────────────── */}
+        {/* ── HISTORY TAB ───────────────────────────────────────────────────── */}
         {tab === 'history' && (
-          loadingPay ? <PageLoader /> : payments.length ? (
-            <div className="divide-y divide-gray-50">
-              {payments.map((p) => (
-                <div key={p._id} className="flex items-center gap-3 py-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm">{monthLabel(p.month)}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {p.prevReading} → {p.currReading} ({p.units} units) · {fmtDate(p.payDate)}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="font-bold text-sm">{fmtCurrency(p.totalBill)}</p>
-                    <span className={`badge ${statusColor(p.status)} text-[10px]`}>{p.status}</span>
-                  </div>
-                  <button
-                    className="btn btn-ghost btn-sm text-blue-600 shrink-0"
-                    onClick={() => setSlipPayment(p)}
-                  >
-                    🧾
-                  </button>
-                </div>
-              ))}
+          loading ? <PageLoader /> : records.length ? (
+            <div className="space-y-3">
+              {records.map((r) => <RecordCard
+                key={r._id} record={r}
+                onAddPayment={() => setPayModal(r)}
+                onViewSlip={() => setSlipRecord(r)}
+                onEdit={() => setEditModal(r)}
+                onDelete={() => deleteRecord(r)}
+                onDeletePayment={(txnId) => deletePayment(r, txnId)}
+              />)}
             </div>
           ) : (
-            <EmptyState
-              icon="📋" title="No History Yet"
-              description="Payment records will appear here after the first rent calculation"
-            />
+            <EmptyState icon="📋" title="No History" description="Generate a slip first" />
           )
         )}
       </Modal>
@@ -204,23 +197,112 @@ const HouseDetailModal = ({ open, onClose, onSave, house: initialHouse }) => {
       {/* Sub-modals */}
       <TenantModal
         open={tenantModal} house={house}
-        onClose={() => setTenantModal(false)}
-        onSave={refreshHouse}
+        onClose={() => setTenantModal(false)} onSave={refresh}
       />
-
-      <RentCalcModal
-        open={rentModal} house={house}
-        onClose={() => setRentModal(false)}
-        onSave={refreshHouse}
+      <RentSlipGenerateModal
+        open={generateModal} house={house}
+        onClose={() => setGenerateModal(false)} onSave={refresh}
       />
-
+      <AddPaymentModal
+        open={!!payModal} record={payModal}
+        onClose={() => setPayModal(null)} onSave={refresh}
+      />
+      <EditSlipModal
+        open={!!editModal} record={editModal}
+        onClose={() => setEditModal(null)} onSave={refresh}
+      />
       <SlipModal
-        open={!!slipPayment}
-        payment={slipPayment}
-        house={house}
-        onClose={() => setSlipPayment(null)}
+        open={!!slipRecord} payment={slipRecord} house={house}
+        onClose={() => setSlipRecord(null)}
       />
     </>
+  );
+};
+
+// ── Record Card ────────────────────────────────────────────────────────────────
+const RecordCard = ({ record: r, onAddPayment, onViewSlip, onEdit, onDelete, onDeletePayment }) => {
+  const [expanded, setExpanded] = useState(false);
+  const remaining = Math.max(0, r.totalAmount - (r.totalPaid || 0));
+
+  const STATUS_COLORS = {
+    paid:    'bg-green-50 border-green-200',
+    partial: 'bg-amber-50 border-amber-200',
+    unpaid:  'bg-red-50 border-red-200',
+  };
+
+  return (
+    <div className={`rounded-xl border p-3 ${STATUS_COLORS[r.status] || 'bg-gray-50 border-gray-200'}`}>
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-sm">{monthLabel(r.month)}</p>
+            <span className={`badge ${statusColor(r.status)} text-[10px]`}>{r.status}</span>
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Total: {fmtCurrency(r.totalAmount)} · Paid: {fmtCurrency(r.totalPaid || 0)}
+            {remaining > 0 && <span className="text-red-600 font-semibold"> · Due: {fmtCurrency(remaining)}</span>}
+          </p>
+        </div>
+        <div className="flex gap-1 shrink-0">
+          {r.status !== 'paid' && (
+            <button onClick={onAddPayment} className="btn btn-primary btn-sm text-[11px] px-2">+ Pay</button>
+          )}
+          <button onClick={onViewSlip} className="btn btn-ghost btn-sm text-[11px]">🧾</button>
+          <button onClick={() => setExpanded((v) => !v)} className="btn btn-ghost btn-sm text-[11px]">
+            {expanded ? '▲' : '▼'}
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="mt-3 space-y-2">
+          {/* Bill breakdown */}
+          <div className="bg-white rounded-lg p-3 text-xs space-y-1">
+            <BillLine label="Room Rent"   val={r.roomRent}    />
+            <BillLine label="Water Bill"  val={r.waterBill}   />
+            <BillLine label="Electricity" val={r.elecBill}    sub={`${r.units} × ₹${r.perUnit}`} />
+            {(r.previousDue?.final > 0 || r.previousDue > 0) && <BillLine label="Prev Due" val={r.previousDue} red />}
+          </div>
+
+          {/* Payment transactions */}
+          {r.transactions?.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Payments</p>
+              {r.transactions.map((txn) => (
+                <div key={txn._id} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 text-xs">
+                  <span>{METHOD_ICONS[txn.paymentMethod] || '💳'}</span>
+                  <div className="flex-1">
+                    <span className="font-semibold text-green-600">{fmtCurrency(txn.amount)}</span>
+                    <span className="text-gray-400 ml-2">{fmtDate(txn.paymentDate)}</span>
+                    {txn.note && <span className="text-gray-400 ml-1">· {txn.note}</span>}
+                  </div>
+                  <button onClick={() => onDeletePayment(txn._id)} className="text-red-400 hover:text-red-600 ml-1">✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-2 pt-1">
+            <button onClick={onEdit} className="btn btn-ghost btn-sm text-xs text-blue-600">✏️ Edit Slip</button>
+            <button onClick={onDelete} className="btn btn-ghost btn-sm text-xs text-red-600">🗑️ Delete</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const BillLine = ({ label, val, sub, red }) => {
+  const final = typeof val === 'object' ? (val?.final ?? 0) : (val ?? 0);
+  const isOverridden = typeof val === 'object' && val?.overridden;
+  return (
+    <div className="flex justify-between text-xs">
+      <span className={`text-gray-500 ${red ? 'text-red-500' : ''}`}>{label}{sub && <span className="text-gray-400 ml-1">({sub})</span>}</span>
+      <span className={`font-semibold ${red ? 'text-red-600' : ''} ${isOverridden ? 'text-amber-600' : ''}`}>
+        {fmtCurrency(final)}{isOverridden ? ' *' : ''}
+      </span>
+    </div>
   );
 };
 
@@ -230,7 +312,6 @@ const InfoCard = ({ title, children }) => (
     <div className="space-y-2">{children}</div>
   </div>
 );
-
 const InfoRow = ({ label, value }) => (
   <div className="flex justify-between text-sm">
     <span className="text-gray-400">{label}</span>
