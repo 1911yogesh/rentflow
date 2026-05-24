@@ -31,16 +31,17 @@ const EditSlipModal = ({ open, onClose, onSave, record }) => {
     setLoading(true);
     try {
       const body = { currReading: parseFloat(currReading), notes };
-      const ovr = {};
+      const ovr  = {};
       if (overrides.roomRent    !== '') ovr.roomRent    = parseFloat(overrides.roomRent);
       if (overrides.waterBill   !== '') ovr.waterBill   = parseFloat(overrides.waterBill);
       if (overrides.elecBill    !== '') ovr.elecBill    = parseFloat(overrides.elecBill);
       if (overrides.previousDue !== '') ovr.previousDue = parseFloat(overrides.previousDue);
       if (Object.keys(ovr).length) body.overrides = ovr;
-      await rentRecordsAPI.update(record._id, body);
+
+      const res = await rentRecordsAPI.update(record._id, body);
       toast.success('✅ Slip updated');
-      onSave();
-      onClose();
+      // Pass updated record back so parent updates list in-place
+      onSave?.(res.data.data);
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Failed to update slip');
     } finally {
@@ -52,16 +53,18 @@ const EditSlipModal = ({ open, onClose, onSave, record }) => {
     <div>
       <label className="form-label flex items-center gap-1">
         {label}
-        {overrides[field] !== '' && <span className="text-[10px] text-amber-600 font-semibold">OVERRIDDEN</span>}
+        {overrides[field] !== '' && (
+          <span className="text-[10px] text-amber-600 font-semibold">OVERRIDDEN</span>
+        )}
       </label>
       <div className="flex gap-2 items-center">
         <input
           type="number" value={overrides[field]}
-          onChange={(e) => setOverrides((o) => ({ ...o, [field]: e.target.value }))}
+          onChange={(e) => setOverrides(o => ({ ...o, [field]: e.target.value }))}
           className="form-input" placeholder={`Auto: ${fmtCurrency(auto)}`}
         />
         {overrides[field] !== '' && (
-          <button type="button" onClick={() => setOverrides((o) => ({ ...o, [field]: '' }))}
+          <button type="button" onClick={() => setOverrides(o => ({ ...o, [field]: '' }))}
             className="btn btn-ghost btn-sm text-red-500 shrink-0">Clear</button>
         )}
       </div>
@@ -100,9 +103,9 @@ const EditSlipModal = ({ open, onClose, onSave, record }) => {
         <div className="border-t pt-4">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Override Values</p>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Room Rent"   field="roomRent"    auto={record.roomRent?.auto ?? record.roomRent} />
-            <Field label="Water Bill"  field="waterBill"   auto={record.waterBill?.auto ?? record.waterBill} />
-            <Field label="Electricity" field="elecBill"    auto={record.elecBill?.auto ?? record.elecBill} />
+            <Field label="Room Rent"   field="roomRent"    auto={record.roomRent?.auto    ?? record.roomRent} />
+            <Field label="Water Bill"  field="waterBill"   auto={record.waterBill?.auto   ?? record.waterBill} />
+            <Field label="Electricity" field="elecBill"    auto={record.elecBill?.auto    ?? record.elecBill} />
             <Field label="Prev Due"    field="previousDue" auto={record.previousDue?.auto ?? record.previousDue} />
           </div>
         </div>

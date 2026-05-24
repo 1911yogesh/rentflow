@@ -30,7 +30,8 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
   const totalPaid = isNew ? (p.totalPaid ?? 0) : (p.paid ?? 0);
   const remaining = Math.max(0, totalAmt - totalPaid);
   const status    = p.status;
-  const areaName  = house?.area?.name || '';
+  // area can come from the house object (populated) or from the rent record's populated house.area
+  const areaName  = house?.area?.name || p?.house?.area?.name || '';
   const transactions = p.transactions || [];
 
   // Electricity display

@@ -21,7 +21,6 @@ function getPrevMonth(month) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-/** Generate a receipt ID like RF-202505-0042 */
 function genReceiptId(month, count) {
   const m = month.replace('-', '');
   const n = String(count).padStart(4, '0');
@@ -150,7 +149,6 @@ exports.createRecord = async (req, res) => {
       elecAuto  = parseFloat((units * perUnit).toFixed(2));
     }
 
-    // If per_unit mode and no reading provided, skip electricity
     if (elecType === 'per_unit' && !currReading)
       return res.status(400).json({ success: false, message: 'Current meter reading is required' });
 
@@ -164,7 +162,6 @@ exports.createRecord = async (req, res) => {
       roomRentField.final + waterBillField.final +
       elecBillField.final + previousDueField.final;
 
-    // Receipt ID: count existing records for this owner+month to get sequence
     const count = await RentRecord.countDocuments({ owner: req.user._id, month }) + 1;
     const receiptId = genReceiptId(month, count);
 
@@ -260,15 +257,41 @@ exports.updateRecord = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DELETE /api/rent-records/:id
+// Rolls back prevReading on the house if this was the latest slip
 // ─────────────────────────────────────────────────────────────────────────────
 exports.deleteRecord = async (req, res) => {
   try {
     const record = await RentRecord.findOne({ _id: req.params.id, owner: req.user._id });
     if (!record) return res.status(404).json({ success: false, message: 'Record not found' });
+
+    // ── Meter reading rollback (per_unit mode only) ───────────────────────────
+    // When a slip is deleted, restore house.prevReading to the value it had
+    // BEFORE this slip was created (stored as record.prevReading).
+    // Only roll back if no newer slip exists — we don't want to disturb the
+    // reading chain if this isn't the most recent slip.
+    if (record.elecType === 'per_unit' && record.prevReading != null) {
+      const newerSlip = await RentRecord.findOne({
+        house:  record.house,
+        owner:  req.user._id,
+        _id:    { $ne: record._id },
+        month:  { $gt: record.month },
+      });
+
+      if (!newerSlip) {
+        // Safe to roll back — this was the latest slip for this house
+        await House.findByIdAndUpdate(record.house, {
+          prevReading: record.prevReading,
+          currReading: record.prevReading,
+        });
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     await PaymentTransaction.deleteMany({ rentRecord: record._id });
     await record.deleteOne();
     res.json({ success: true, message: 'Rent record deleted' });
   } catch (err) {
+    console.error('deleteRecord:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };

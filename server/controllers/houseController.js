@@ -10,7 +10,9 @@ exports.getHouses = async (req, res) => {
     const filter = { owner: req.user._id };
     if (req.query.area) filter.area = req.query.area;
 
-    const houses = await House.find(filter).sort({ number: 1 });
+    const houses = await House.find(filter)
+      .populate('area', 'name city')   // populate area so house.area.name is available
+      .sort({ number: 1 });
     res.json({ success: true, data: houses });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
@@ -20,7 +22,8 @@ exports.getHouses = async (req, res) => {
 // ── GET /api/houses/:id ────────────────────────────────────────────────────────
 exports.getHouse = async (req, res) => {
   try {
-    const house = await House.findOne({ _id: req.params.id, owner: req.user._id });
+    const house = await House.findOne({ _id: req.params.id, owner: req.user._id })
+      .populate('area', 'name city');  // populate area so house.area.name is available
     if (!house) return res.status(404).json({ success: false, message: 'House not found' });
     res.json({ success: true, data: house });
   } catch (err) {
@@ -33,7 +36,6 @@ exports.createHouse = async (req, res) => {
   try {
     const { area, number, roomRent, waterBill, elecType, elecPerUnit, elecFixed } = req.body;
 
-    // Verify area belongs to this user
     const areaDoc = await Area.findOne({ _id: area, owner: req.user._id });
     if (!areaDoc) return res.status(404).json({ success: false, message: 'Area not found' });
 
@@ -48,7 +50,9 @@ exports.createHouse = async (req, res) => {
       elecFixed:   elecFixed || 0,
     });
 
-    res.status(201).json({ success: true, data: house });
+    // Return with area populated
+    const populated = await House.findById(house._id).populate('area', 'name city');
+    res.status(201).json({ success: true, data: populated });
   } catch (err) {
     if (err.code === 11000) return res.status(400).json({ success: false, message: 'House number already exists in this area' });
     res.status(500).json({ success: false, message: 'Server error' });
@@ -70,7 +74,8 @@ exports.updateHouse = async (req, res) => {
       { _id: req.params.id, owner: req.user._id },
       updates,
       { new: true, runValidators: true }
-    );
+    ).populate('area', 'name city');  // populate area on update response too
+
     if (!house) return res.status(404).json({ success: false, message: 'House not found' });
     res.json({ success: true, data: house });
   } catch (err) {
@@ -108,7 +113,8 @@ exports.vacateHouse = async (req, res) => {
         joinDate: null, deposit: 0, prevDue: 0, advance: 0,
       },
       { new: true }
-    );
+    ).populate('area', 'name city');
+
     if (!house) return res.status(404).json({ success: false, message: 'House not found' });
     res.json({ success: true, data: house });
   } catch (err) {
@@ -117,16 +123,11 @@ exports.vacateHouse = async (req, res) => {
 };
 
 // ── GET /api/houses/:id/due ────────────────────────────────────────────────────
-// Returns dynamically-computed remaining due for a house (from RentRecord system)
 exports.getHouseDue = async (req, res) => {
   try {
-    const RentRecord         = require('../models/RentRecord');
-    const PaymentTransaction = require('../models/PaymentTransaction');
-
     const house = await House.findOne({ _id: req.params.id, owner: req.user._id });
     if (!house) return res.status(404).json({ success: false, message: 'House not found' });
 
-    // Find the most recent unpaid/partial record
     const lastRecord = await RentRecord.findOne({
       house: house._id,
       status: { $in: ['unpaid', 'partial'] },

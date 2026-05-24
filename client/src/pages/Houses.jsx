@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Plus, Search, ChevronLeft, Pencil, Trash2, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -21,19 +21,20 @@ const Houses = () => {
 
   // Modal state
   const [houseModal,  setHouseModal]  = useState(false);
-  const [editHouse,   setEditHouse]   = useState(null);  // house being edited
+  const [editHouse,   setEditHouse]   = useState(null);
   const [tenantHouse, setTenantHouse] = useState(null);
-  const [detailHouse, setDetailHouse] = useState(null);
+  const [detailHouse, setDetailHouse] = useState(null);  // for HouseDetailModal
   const [confirmDel,  setConfirmDel]  = useState(null);
 
-  const load = async () => {
+  // ── Full page load ─────────────────────────────────────────────────────────
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const [areaRes, housesRes] = await Promise.all([
         areasAPI.getAll(),
         housesAPI.getAll({ area: areaId }),
       ]);
-      const foundArea = areaRes.data.data.find((a) => a._id === areaId);
+      const foundArea = areaRes.data.data.find(a => a._id === areaId);
       setArea(foundArea || null);
       setHouses(housesRes.data.data);
     } catch {
@@ -41,39 +42,41 @@ const Houses = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [areaId]);
 
-  useEffect(() => { load(); }, [areaId]);
+  useEffect(() => { load(); }, [load]);
+
+  // ── Silently refresh one house in the grid after HouseDetailModal changes ──
+  // This keeps the grid live without a full page reload and without closing the detail modal.
+  const refreshOneHouse = useCallback(async (houseId) => {
+    try {
+      const res = await housesAPI.getOne(houseId);
+      const updated = res.data.data;
+      setHouses(prev => prev.map(h => h._id === houseId ? updated : h));
+      // Also keep detailHouse in sync so the modal header reflects changes
+      setDetailHouse(prev => prev?._id === houseId ? updated : prev);
+    } catch { /* ignore */ }
+  }, []);
 
   const handleDelete = async (house) => {
     try {
       await housesAPI.remove(house._id);
       toast.success('House deleted');
-      load();
+      setHouses(prev => prev.filter(h => h._id !== house._id));
     } catch {
       toast.error('Failed to delete house');
     }
     setConfirmDel(null);
   };
 
-  // Open add modal
-  const openAdd = () => {
-    setEditHouse(null);
-    setHouseModal(true);
-  };
-
-  // Open edit modal with the selected house pre-loaded
-  const openEdit = (house) => {
-    setEditHouse(house);
-    setHouseModal(true);
-  };
+  const openAdd  = ()      => { setEditHouse(null);  setHouseModal(true); };
+  const openEdit = (house) => { setEditHouse(house); setHouseModal(true); };
 
   // Stats
-  const occupied   = houses.filter((h) => h.status === 'occupied').length;
+  const occupied   = houses.filter(h => h.status === 'occupied').length;
   const pendingDue = houses.reduce((s, h) => s + (h.prevDue || 0), 0);
 
-  // Filtered list
-  const displayed = houses.filter((h) => {
+  const displayed = houses.filter(h => {
     const matchSearch =
       (h.number     || '').toLowerCase().includes(search.toLowerCase()) ||
       (h.tenantName || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -87,10 +90,8 @@ const Houses = () => {
   return (
     <div>
       {/* Breadcrumb */}
-      <button
-        onClick={() => navigate('/areas')}
-        className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-blue-600 mb-4 transition-colors"
-      >
+      <button onClick={() => navigate('/areas')}
+        className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-blue-600 mb-4 transition-colors">
         <ChevronLeft size={16} /> Areas
       </button>
 
@@ -107,29 +108,25 @@ const Houses = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <StatCard label="Total"    value={houses.length}          icon="🏠" color="blue"  />
-        <StatCard label="Occupied" value={occupied}               icon="👤" color="green" />
-        <StatCard label="Pending"  value={fmtCurrency(pendingDue)} icon="⚠️" color="red"  />
+        <StatCard label="Total"    value={houses.length}           icon="🏠" color="blue"  />
+        <StatCard label="Occupied" value={occupied}                icon="👤" color="green" />
+        <StatCard label="Pending"  value={fmtCurrency(pendingDue)} icon="⚠️" color="red"   />
       </div>
 
       {/* Filters */}
       <div className="flex gap-3 mb-5 flex-wrap">
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 flex-1 min-w-[180px] max-w-xs">
           <Search size={15} className="text-gray-400 shrink-0" />
-          <input
-            value={search} onChange={(e) => setSearch(e.target.value)}
+          <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search houses or tenants…"
-            className="flex-1 text-sm outline-none bg-transparent"
-          />
+            className="flex-1 text-sm outline-none bg-transparent" />
         </div>
         <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1">
-          {['all', 'occupied', 'vacant'].map((f) => (
-            <button
-              key={f} onClick={() => setFilter(f)}
+          {['all', 'occupied', 'vacant'].map(f => (
+            <button key={f} onClick={() => setFilter(f)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${
                 filter === f ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-700'
-              }`}
-            >
+              }`}>
               {f}
             </button>
           ))}
@@ -139,14 +136,14 @@ const Houses = () => {
       {/* Houses grid */}
       {displayed.length ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {displayed.map((house) => (
+          {displayed.map(house => (
             <HouseCard
               key={house._id}
               house={house}
               onClick={() => setDetailHouse(house)}
-              onEdit={(e)      => { e.stopPropagation(); openEdit(house); }}
-              onAddTenant={(e) => { e.stopPropagation(); setTenantHouse(house); }}
-              onDelete={(e)    => { e.stopPropagation(); setConfirmDel(house); }}
+              onEdit={e      => { e.stopPropagation(); openEdit(house); }}
+              onAddTenant={e => { e.stopPropagation(); setTenantHouse(house); }}
+              onDelete={e    => { e.stopPropagation(); setConfirmDel(house); }}
             />
           ))}
         </div>
@@ -163,30 +160,43 @@ const Houses = () => {
         </div>
       )}
 
-      {/* Add / Edit House Modal — same modal, house prop controls mode */}
+      {/* ── Modals ── */}
+
       <HouseModal
         open={houseModal}
         areaId={areaId}
         house={editHouse}
         onClose={() => { setHouseModal(false); setEditHouse(null); }}
-        onSave={load}
+        onSave={() => {
+          load(); // full reload only for add/edit house config
+        }}
       />
 
       <TenantModal
-        open={!!tenantHouse} house={tenantHouse}
+        open={!!tenantHouse}
+        house={tenantHouse}
         onClose={() => setTenantHouse(null)}
-        onSave={load}
+        onSave={() => {
+          // Refresh just this house card live
+          if (tenantHouse?._id) refreshOneHouse(tenantHouse._id);
+          setTenantHouse(null);
+        }}
       />
 
+      {/* HouseDetailModal: onSave refreshes just that one card live */}
       <HouseDetailModal
-        open={!!detailHouse} house={detailHouse}
+        open={!!detailHouse}
+        house={detailHouse}
         onClose={() => setDetailHouse(null)}
-        onSave={load}
+        onSave={() => {
+          if (detailHouse?._id) refreshOneHouse(detailHouse._id);
+        }}
       />
 
       {/* Delete Confirmation */}
       {confirmDel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.45)' }}>
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <div className="text-3xl mb-3">🗑️</div>
             <p className="font-semibold text-gray-900 mb-1">Delete house "{confirmDel.number}"?</p>
@@ -213,28 +223,21 @@ const HouseCard = ({ house, onClick, onEdit, onAddTenant, onDelete }) => {
       className="card p-4 cursor-pointer hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 relative"
       onClick={onClick}
     >
-      {/* Edit & Delete action buttons — always visible in top-right */}
-      <div
-        className="absolute top-3 right-3 flex items-center gap-1"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          onClick={onEdit}
+      {/* Edit & Delete — always visible */}
+      <div className="absolute top-3 right-3 flex items-center gap-1" onClick={e => e.stopPropagation()}>
+        <button onClick={onEdit}
           className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition"
-          title="Edit house"
-        >
+          title="Edit house">
           <Pencil size={14} />
         </button>
-        <button
-          onClick={onDelete}
+        <button onClick={onDelete}
           className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition"
-          title="Delete house"
-        >
+          title="Delete house">
           <Trash2 size={14} />
         </button>
       </div>
 
-      {/* Header — leave right padding so buttons don't overlap */}
+      {/* Header */}
       <div className="flex items-start justify-between mb-3 pr-16">
         <div>
           <span className="text-xs font-bold text-blue-600 font-heading">{house.number}</span>
@@ -249,13 +252,11 @@ const HouseCard = ({ house, onClick, onEdit, onAddTenant, onDelete }) => {
           <span className={`badge ${isOccupied ? 'badge-green' : 'badge-gray'}`}>
             {isOccupied ? 'Occupied' : 'Vacant'}
           </span>
-          {isOccupied && house.prevDue > 0 && (
-            <span className="badge badge-red">Due</span>
-          )}
+          {isOccupied && house.prevDue > 0 && <span className="badge badge-red">Due</span>}
         </div>
       </div>
 
-      {/* Rent details grid */}
+      {/* Rent details */}
       {isOccupied && (
         <div className="bg-gray-50 rounded-lg p-2.5 text-xs grid grid-cols-2 gap-1.5 mb-3">
           <div><span className="text-gray-400">Rent: </span><strong>{fmtCurrency(house.roomRent)}</strong></div>
@@ -289,12 +290,9 @@ const HouseCard = ({ house, onClick, onEdit, onAddTenant, onDelete }) => {
                 <p className="text-[10px] text-gray-400">Prev Reading</p>
                 <p className="font-semibold text-xs">{house.prevReading} units</p>
               </div>
-              {/* Edit tenant button */}
-              <button
-                onClick={onAddTenant}
+              <button onClick={onAddTenant}
                 className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition"
-                title="Edit tenant details"
-              >
+                title="Edit tenant">
                 <UserPlus size={14} />
               </button>
             </div>
@@ -302,10 +300,7 @@ const HouseCard = ({ house, onClick, onEdit, onAddTenant, onDelete }) => {
         ) : (
           <>
             <p className="text-xs text-gray-400">{fmtCurrency(house.roomRent)}/month</p>
-            <button
-              className="btn btn-primary btn-sm flex items-center gap-1"
-              onClick={onAddTenant}
-            >
+            <button className="btn btn-primary btn-sm flex items-center gap-1" onClick={onAddTenant}>
               <UserPlus size={13} /> Add Tenant
             </button>
           </>

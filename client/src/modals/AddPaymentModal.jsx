@@ -19,7 +19,12 @@ const AddPaymentModal = ({ open, onClose, onSave, record }) => {
   const [note,    setNote]    = useState('');
   const [loading, setLoading] = useState(false);
 
-  const reset = () => { setAmount(''); setDate(new Date().toISOString().split('T')[0]); setMethod('cash'); setNote(''); };
+  const reset = () => {
+    setAmount('');
+    setDate(new Date().toISOString().split('T')[0]);
+    setMethod('cash');
+    setNote('');
+  };
 
   const remaining = record ? Math.max(0, record.totalAmount - (record.totalPaid || 0)) : 0;
 
@@ -28,16 +33,13 @@ const AddPaymentModal = ({ open, onClose, onSave, record }) => {
     if (!amt || amt <= 0) return toast.error('Enter a valid amount');
     setLoading(true);
     try {
-      await rentRecordsAPI.addPayment(record._id, {
-        amount: amt,
-        paymentDate: date,
-        paymentMethod: method,
-        note,
+      const res = await rentRecordsAPI.addPayment(record._id, {
+        amount: amt, paymentDate: date, paymentMethod: method, note,
       });
       toast.success(`✅ ₹${amt.toLocaleString('en-IN')} payment recorded`);
       reset();
-      onSave();
-      onClose();
+      // Pass the updated record back so parent can update it in-list without a full reload
+      onSave?.(res.data.data);
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Failed to add payment');
     } finally {
@@ -49,7 +51,8 @@ const AddPaymentModal = ({ open, onClose, onSave, record }) => {
 
   return (
     <Modal
-      open={open} onClose={() => { reset(); onClose(); }}
+      open={open}
+      onClose={() => { reset(); onClose(); }}
       title="Add Payment"
       size="sm"
       footer={
@@ -96,11 +99,8 @@ const AddPaymentModal = ({ open, onClose, onSave, record }) => {
             autoFocus
           />
           {remaining > 0 && (
-            <button
-              type="button"
-              onClick={() => setAmount(String(remaining))}
-              className="text-xs text-blue-600 mt-1 hover:underline"
-            >
+            <button type="button" onClick={() => setAmount(String(remaining))}
+              className="text-xs text-blue-600 mt-1 hover:underline">
               Pay full remaining ({fmtCurrency(remaining)})
             </button>
           )}
