@@ -72,6 +72,9 @@ export const rentRecordsAPI = {
   removePayment: (id, txnId) => api.delete(`/rent-records/${id}/payments/${txnId}`),
   getDashboard:  (p)         => api.get('/rent-records/dashboard', { params: p }),
   dashboard:     (p)         => api.get('/rent-records/dashboard', { params: p }),
+  // ── WhatsApp Sharing ──────────────────────────────────────────────────────
+  getShareLink:  (id)        => api.post(`/rent-records/${id}/share`),
+  getSharedSlip: (token)     => api.get(`/rent-records/share/${token}`),
 };
 
 export const paymentsAPI = {

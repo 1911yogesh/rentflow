@@ -1,7 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../components/UI';
-import { fmtCurrency, fmtDate, monthLabel } from '../utils/helpers';
+import { fmtCurrency, fmtDate, monthLabel, sendSlipViaWhatsApp } from '../utils/helpers';
 import { useSettings } from '../context/SettingsContext';
 
 const METHOD_ICONS = { cash: '💵', upi: '📱', bank_transfer: '🏦', cheque: '📄', other: '🔄' };
@@ -18,6 +18,7 @@ const makeUpiQrUrl = (upiId, upiName, amount, upiNote) => {
 const SlipModal = ({ open, onClose, payment: p, house }) => {
   const slipRef = useRef(null);
   const { settings } = useSettings();
+  const [sendingWa, setSendingWa] = useState(false);
 
   if (!p || !house) return null;
 
@@ -75,6 +76,12 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
     } catch { toast.error('Failed to generate image'); }
   };
 
+  const sendViaWhatsApp = async () => {
+    setSendingWa(true);
+    await sendSlipViaWhatsApp(p, house);
+    setSendingWa(false);
+  };
+
   const printSlip = () => {
     const content = slipRef.current.innerHTML;
     const w = window.open('', '_blank');
@@ -109,6 +116,10 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
           <button className="btn btn-secondary btn-sm" onClick={printSlip}>🖨️ Print</button>
           <button className="btn btn-secondary btn-sm" onClick={downloadImage}>🖼️ Image</button>
           <button className="btn btn-primary btn-sm"   onClick={downloadPDF}>📄 PDF</button>
+          <button className="btn btn-sm" style={{ background: '#25D366', color: '#fff' }}
+            onClick={sendViaWhatsApp} disabled={sendingWa}>
+            {sendingWa ? '⏳ Preparing…' : '💬 Send via WhatsApp'}
+          </button>
         </div>
       }
     >

@@ -44,11 +44,18 @@ const rentRecordSchema = new mongoose.Schema(
 
     // ── Receipt ID (NEW) ─────────────────────────────────────────────────────
     receiptId: { type: String, trim: true, default: '' },
+
+    // ── Secure Share Token (NEW) ─────────────────────────────────────────────
+    // Used for public, unauthenticated slip viewing (e.g. via WhatsApp link).
+    // Generated lazily on first share request; unique + sparse so existing
+    // records without a token don't collide.
+    shareToken: { type: String, trim: true, default: undefined },
   },
   { timestamps: true }
 );
 
 rentRecordSchema.index({ house: 1, month: 1 }, { unique: true });
 rentRecordSchema.index({ owner: 1, month: 1 });
+rentRecordSchema.index({ shareToken: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('RentRecord', rentRecordSchema);

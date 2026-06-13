@@ -9,11 +9,18 @@ const {
   addPayment,
   deletePayment,
   getDashboardStats,
+  getShareLink,
+  getSharedSlip,
 } = require('../controllers/rentRecordController');
 const { protect }  = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
 const router = express.Router();
+
+// ── PUBLIC — must be registered BEFORE `router.use(protect)` ──────────────────
+// Used by the shared slip page that tenants open via WhatsApp links.
+router.get('/share/:token', getSharedSlip);
+
 router.use(protect);
 
 router.get('/dashboard', getDashboardStats);
@@ -48,5 +55,8 @@ router.post(
   addPayment
 );
 router.delete('/:id/payments/:txnId', deletePayment);
+
+// Generate (or retrieve) the secure WhatsApp share link for a slip
+router.post('/:id/share', getShareLink);
 
 module.exports = router;

@@ -10,6 +10,7 @@ const TenantModal = ({ open, onClose, onSave, house }) => {
     tenantName: '', phone: '', altPhone: '', aadhaar: '',
     address: '', joinDate: new Date().toISOString().split('T')[0],
     deposit: '', prevReading: '0',
+    countryCode: '91', whatsappNumber: '',
   });
   const [loading, setLoading] = useState(false);
 
@@ -27,6 +28,8 @@ const TenantModal = ({ open, onClose, onSave, house }) => {
                        : new Date().toISOString().split('T')[0],
         deposit:     house.deposit     != null ? String(house.deposit)     : '',
         prevReading: house.prevReading != null ? String(house.prevReading) : '0',
+        countryCode:    house.countryCode    || '91',
+        whatsappNumber: house.whatsappNumber || '',
       });
     }
   }, [open, house?._id]);
@@ -37,6 +40,10 @@ const TenantModal = ({ open, onClose, onSave, house }) => {
     e.preventDefault();
     if (!form.tenantName.trim()) return toast.error('Tenant name is required');
     if (!form.phone.trim())      return toast.error('Phone number is required');
+    if (form.countryCode && !/^\d{1,4}$/.test(form.countryCode.trim()))
+      return toast.error('Country code must be 1-4 digits (no "+")');
+    if (form.whatsappNumber && !/^\d{7,15}$/.test(form.whatsappNumber.replace(/\D/g, '')))
+      return toast.error('WhatsApp number must be 7-15 digits');
     setLoading(true);
     try {
       await housesAPI.update(house._id, {
@@ -48,6 +55,8 @@ const TenantModal = ({ open, onClose, onSave, house }) => {
         joinDate:    form.joinDate || undefined,
         deposit:     Number(form.deposit)     || 0,
         prevReading: Number(form.prevReading) || 0,
+        countryCode:    form.countryCode.trim().replace(/\D/g, '') || '91',
+        whatsappNumber: form.whatsappNumber.trim().replace(/\D/g, ''),
         // Only reset currReading to prevReading when adding a brand-new tenant
         ...(isEditing ? {} : { currReading: Number(form.prevReading) || 0 }),
         status: 'occupied',
@@ -115,6 +124,28 @@ const TenantModal = ({ open, onClose, onSave, house }) => {
                 className="form-input" placeholder="Optional" />
             </FormGroup>
           </div>
+        </div>
+
+        <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-3 mt-2">WhatsApp Sharing</p>
+        <div className="grid grid-cols-2 gap-3 mb-2">
+          <div className="col-span-2 sm:col-span-1">
+            <FormGroup label="Country Code">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-400">+</span>
+                <input name="countryCode" value={form.countryCode} onChange={handle}
+                  className="form-input" placeholder="91" inputMode="numeric" maxLength={4} />
+              </div>
+            </FormGroup>
+          </div>
+          <div className="col-span-2 sm:col-span-1">
+            <FormGroup label="WhatsApp Number">
+              <input name="whatsappNumber" value={form.whatsappNumber} onChange={handle}
+                className="form-input" type="tel" placeholder="Leave blank to use Phone Number above" />
+            </FormGroup>
+          </div>
+          <p className="col-span-2 text-xs text-gray-400 -mt-1">
+            Used for "Send via WhatsApp" on rent slips. If left blank, the Phone Number above is used.
+          </p>
         </div>
 
         <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-3 mt-2">Financial Details</p>

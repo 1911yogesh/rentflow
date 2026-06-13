@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { rentRecordsAPI } from '../services/api';
-import { fmtCurrency, monthLabel, statusColor, initials } from '../utils/helpers';
+import { fmtCurrency, monthLabel, statusColor, initials, sendSlipViaWhatsApp } from '../utils/helpers';
 import { EmptyState, PageLoader } from '../components/UI';
 import SlipModal       from '../modals/SlipModal';
 import AddPaymentModal from '../modals/AddPaymentModal';
@@ -13,6 +13,13 @@ const Slips = () => {
   const [search,   setSearch]   = useState('');
   const [slipData, setSlipData] = useState(null);
   const [payRecord, setPayRecord] = useState(null);
+  const [sendingId, setSendingId] = useState(null);
+
+  const handleWhatsApp = async (r) => {
+    setSendingId(r._id);
+    await sendSlipViaWhatsApp(r, r.house);
+    setSendingId(null);
+  };
 
   const load = async () => {
     setLoading(true);
@@ -71,6 +78,10 @@ const Slips = () => {
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <button className="btn btn-secondary btn-sm text-xs" onClick={() => setSlipData(r)}>🧾 View</button>
+                  <button className="btn btn-sm text-xs" style={{ background: '#25D366', color: '#fff' }}
+                    onClick={() => handleWhatsApp(r)} disabled={sendingId === r._id}>
+                    {sendingId === r._id ? '⏳' : '💬'}
+                  </button>
                   {r.status !== 'paid' && (
                     <button className="btn btn-primary btn-sm text-xs" onClick={() => setPayRecord(r)}>
                       <Plus size={12} /> Pay

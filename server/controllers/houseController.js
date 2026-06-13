@@ -66,6 +66,7 @@ exports.updateHouse = async (req, res) => {
       'number','roomRent','waterBill','elecType','elecPerUnit','elecFixed',
       'tenantName','phone','altPhone','aadhaar','address','joinDate',
       'deposit','prevDue','advance','prevReading','currReading','status',
+      'countryCode','whatsappNumber',
     ];
     const updates = {};
     allowed.forEach((k) => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
@@ -110,6 +111,7 @@ exports.vacateHouse = async (req, res) => {
       {
         status: 'vacant',
         tenantName: '', phone: '', altPhone: '', aadhaar: '', address: '',
+        countryCode: '91', whatsappNumber: '',
         joinDate: null, deposit: 0, prevDue: 0, advance: 0,
       },
       { new: true }

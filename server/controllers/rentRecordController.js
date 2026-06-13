@@ -1,10 +1,25 @@
 const RentRecord         = require('../models/RentRecord');
 const PaymentTransaction = require('../models/PaymentTransaction');
 const House              = require('../models/House');
+const AppSettings        = require('../models/AppSettings');
+const crypto             = require('crypto');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Lazily generate (and persist) a unique share token for a rent record.
+// Existing records created before this feature won't have one yet — this
+// keeps full backward compatibility without a separate migration script.
+async function ensureShareToken(recordId) {
+  const record = await RentRecord.findById(recordId);
+  if (!record) return null;
+  if (!record.shareToken) {
+    record.shareToken = crypto.randomBytes(16).toString('hex');
+    await record.save();
+  }
+  return record.shareToken;
+}
 
 function buildOverrideField(auto, override) {
   const autoVal = parseFloat(auto) || 0;
@@ -164,6 +179,7 @@ exports.createRecord = async (req, res) => {
 
     const count = await RentRecord.countDocuments({ owner: req.user._id, month }) + 1;
     const receiptId = genReceiptId(month, count);
+    const shareToken = crypto.randomBytes(16).toString('hex');
 
     const record = await RentRecord.create({
       house:       houseId,
@@ -184,6 +200,7 @@ exports.createRecord = async (req, res) => {
       totalPaid: 0,
       notes:     notes || '',
       receiptId,
+      shareToken,
     });
 
     // Roll meter forward (only for per_unit)
@@ -413,6 +430,101 @@ exports.getDashboardStats = async (req, res) => {
     });
   } catch (err) {
     console.error('getDashboardStats:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/rent-records/:id/share
+// Returns (and lazily creates) a secure share token for "Send via WhatsApp".
+// Protected — only the owner can mint a share link for their own slip.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getShareLink = async (req, res) => {
+  try {
+    const record = await RentRecord.findOne({ _id: req.params.id, owner: req.user._id });
+    if (!record) return res.status(404).json({ success: false, message: 'Record not found' });
+
+    const token = await ensureShareToken(record._id);
+    res.json({ success: true, data: { token } });
+  } catch (err) {
+    console.error('getShareLink:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/rent-records/share/:token
+// PUBLIC, unauthenticated, read-only — used by the shared slip page that
+// tenants open via the WhatsApp link. Returns only the fields needed to
+// render the slip; never exposes owner identity, sensitive tenant fields
+// (aadhaar, address, alt phone), or any other tenants'/houses' data.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getSharedSlip = async (req, res) => {
+  try {
+    const { token } = req.params;
+    if (!token) return res.status(400).json({ success: false, message: 'Invalid link' });
+
+    const record = await RentRecord.findOne({ shareToken: token })
+      .populate({ path: 'house', populate: { path: 'area', select: 'name city' } })
+      .lean();
+
+    if (!record) return res.status(404).json({ success: false, message: 'This slip link is invalid or has expired' });
+
+    const transactions = await PaymentTransaction.find({ rentRecord: record._id })
+      .sort({ paymentDate: 1 })
+      .select('amount paymentDate paymentMethod note')
+      .lean();
+
+    // Pull receipt/branding settings (non-sensitive) from the owning landlord
+    const settings = await AppSettings.findOne({ owner: record.owner }).lean();
+
+    // ── Sanitize: only return what's needed to render the slip ──────────────
+    const house = record.house || {};
+    const safeHouse = {
+      number:   house.number,
+      tenantName: house.tenantName,
+      phone:    house.phone,
+      area:     house.area ? { name: house.area.name } : undefined,
+    };
+
+    const safeRecord = {
+      _id: record._id,
+      month: record.month,
+      roomRent: record.roomRent,
+      waterBill: record.waterBill,
+      elecBill: record.elecBill,
+      previousDue: record.previousDue,
+      elecType: record.elecType,
+      prevReading: record.prevReading,
+      currReading: record.currReading,
+      units: record.units,
+      perUnit: record.perUnit,
+      elecFixed: record.elecFixed,
+      totalAmount: record.totalAmount,
+      status: record.status,
+      totalPaid: record.totalPaid,
+      notes: record.notes,
+      generatedAt: record.generatedAt,
+      createdAt: record.createdAt,
+      receiptId: record.receiptId,
+      transactions,
+    };
+
+    const safeSettings = settings ? {
+      showElectricityBreakdown: settings.showElectricityBreakdown,
+      qrType: settings.qrType,
+      upiId: settings.upiId,
+      upiName: settings.upiName,
+      upiNote: settings.upiNote,
+      customQrUrl: settings.customQrUrl,
+      ownerName: settings.ownerName,
+      ownerPhone: settings.ownerPhone,
+      propertyName: settings.propertyName,
+    } : {};
+
+    res.json({ success: true, data: { record: safeRecord, house: safeHouse, settings: safeSettings } });
+  } catch (err) {
+    console.error('getSharedSlip:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };

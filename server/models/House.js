@@ -13,6 +13,10 @@ const houseSchema = new mongoose.Schema(
     tenantName:  { type: String, trim: true, default: '' },
     phone:       { type: String, trim: true, default: '' },
     altPhone:    { type: String, trim: true, default: '' },
+
+    // ── WhatsApp Sharing (NEW) ────────────────────────────────────────────────
+    countryCode:     { type: String, trim: true, default: '91' },   // dial code, no '+'
+    whatsappNumber:  { type: String, trim: true, default: '' },      // falls back to `phone` if empty
     aadhaar:     { type: String, trim: true, default: '' },
     address:     { type: String, trim: true, default: '' },
     joinDate:    { type: Date },

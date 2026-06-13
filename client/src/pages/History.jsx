@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Trash2, Edit3, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { rentRecordsAPI } from '../services/api';
-import { fmtCurrency, fmtDate, monthLabel, statusColor } from '../utils/helpers';
+import { fmtCurrency, fmtDate, monthLabel, statusColor, sendSlipViaWhatsApp } from '../utils/helpers';
 import { EmptyState, PageLoader } from '../components/UI';
 import SlipModal       from '../modals/SlipModal';
 import AddPaymentModal from '../modals/AddPaymentModal';
@@ -27,6 +27,13 @@ const History = () => {
   const [slipRecord,   setSlipRecord]   = useState(null);
   const [payRecord,    setPayRecord]    = useState(null);
   const [editRecord,   setEditRecord]   = useState(null);
+  const [sendingId,    setSendingId]    = useState(null);
+
+  const handleWhatsApp = async (r) => {
+    setSendingId(r._id);
+    await sendSlipViaWhatsApp(r, r.house);
+    setSendingId(null);
+  };
 
   const load = async () => {
     setLoading(true);
@@ -159,6 +166,10 @@ const History = () => {
                           <td className="px-4 py-3">
                             <div className="flex gap-1">
                               <button className="btn btn-ghost btn-sm text-blue-600 text-xs" onClick={(e) => { e.stopPropagation(); setSlipRecord(r); }}>🧾</button>
+                              <button className="btn btn-sm text-xs" style={{ background: '#25D366', color: '#fff' }}
+                                onClick={(e) => { e.stopPropagation(); handleWhatsApp(r); }} disabled={sendingId === r._id}>
+                                {sendingId === r._id ? '⏳' : '💬'}
+                              </button>
                               {r.status !== 'paid' && (
                                 <button className="btn btn-primary btn-sm text-xs" onClick={(e) => { e.stopPropagation(); setPayRecord(r); }}>
                                   <Plus size={12} /> Pay
@@ -225,6 +236,10 @@ const History = () => {
                   )}
                   <div className="flex gap-1 mt-3 flex-wrap">
                     <button className="btn btn-ghost btn-sm text-blue-600 text-xs border border-gray-100 flex-1 justify-center" onClick={() => setSlipRecord(r)}>🧾 Slip</button>
+                    <button className="btn btn-sm text-xs flex-1 justify-center" style={{ background: '#25D366', color: '#fff' }}
+                      onClick={() => handleWhatsApp(r)} disabled={sendingId === r._id}>
+                      {sendingId === r._id ? '⏳' : '💬 WhatsApp'}
+                    </button>
                     {r.status !== 'paid' && (
                       <button className="btn btn-primary btn-sm text-xs flex-1 justify-center" onClick={() => setPayRecord(r)}>+ Add Payment</button>
                     )}

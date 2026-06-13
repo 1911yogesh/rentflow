@@ -14,6 +14,7 @@ import Houses        from './pages/Houses';
 import History       from './pages/History';
 import Slips         from './pages/Slips';
 import Settings      from './pages/Settings';
+import SharedSlip    from './pages/SharedSlip';
 
 export default function App() {
   return (
@@ -33,6 +34,9 @@ export default function App() {
           <Route path="/register"        element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password/:token" element={<ResetPassword />} />
+
+          {/* Public Rent Slip Sharing (WhatsApp links) */}
+          <Route path="/share/:token" element={<SharedSlip />} />
 
           {/* Protected App Routes */}
           <Route element={<ProtectedRoute />}>
