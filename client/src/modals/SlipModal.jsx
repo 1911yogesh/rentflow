@@ -78,7 +78,7 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
 
   const sendViaWhatsApp = async () => {
     setSendingWa(true);
-    await sendSlipViaWhatsApp(p, house);
+    await sendSlipViaWhatsApp(p, house, slipRef.current);
     setSendingWa(false);
   };
 
@@ -118,7 +118,7 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
           <button className="btn btn-primary btn-sm"   onClick={downloadPDF}>📄 PDF</button>
           <button className="btn btn-sm" style={{ background: '#25D366', color: '#fff' }}
             onClick={sendViaWhatsApp} disabled={sendingWa}>
-            {sendingWa ? '⏳ Preparing…' : '💬 Send via WhatsApp'}
+            {sendingWa ? '⏳ Saving & Opening…' : '💬 Send via WhatsApp'}
           </button>
         </div>
       }

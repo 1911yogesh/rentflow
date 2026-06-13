@@ -56,21 +56,17 @@ export const getSlipAmounts = (p) => {
   return { roomRent, waterBill, elecBill, prevDue, totalAmt, totalPaid, remaining };
 };
 
-// Builds the pre-filled WhatsApp message for a rent slip, following the
-// agreed template. `shareUrl` is the public, tokenized link to the slip.
-export const buildWhatsAppMessage = (record, house, shareUrl) => {
-  const { roomRent, elecBill, totalAmt, totalPaid, remaining } = getSlipAmounts(record);
-  const rentPlusWater = roomRent + (getSlipAmounts(record).waterBill || 0);
+// Builds the pre-filled WhatsApp message for a rent slip.
+// Simplified to only include tenant name, month, and total payable —
+// full breakdown is in the attached rent slip image/PDF.
+export const buildWhatsAppMessage = (record, house) => {
+  const { totalAmt } = getSlipAmounts(record);
 
   return (
     `Hello ${house?.tenantName || 'Tenant'},\n\n` +
-    `Your rent slip for ${monthLabel(record?.month)} is ready.\n\n` +
-    `Rent Amount: ${fmtCurrency(rentPlusWater)}\n` +
-    `Electricity Amount: ${fmtCurrency(elecBill)}\n` +
-    `Total Amount: ${fmtCurrency(totalAmt)}\n` +
-    `Paid Amount: ${fmtCurrency(totalPaid)}\n` +
-    `Remaining Due: ${fmtCurrency(remaining)}\n\n` +
-    `View / download your rent slip here:\n${shareUrl}\n\n` +
+    `Your rent slip for ${monthLabel(record?.month)} has been generated.\n\n` +
+    `Total Amount Payable: ${fmtCurrency(totalAmt)}\n\n` +
+    `Please find the rent slip attached.\n\n` +
     `Thank you.`
   );
 };
@@ -91,35 +87,63 @@ export const buildWhatsAppUrl = (house, message) => {
   return `https://wa.me/${full}?text=${encodeURIComponent(message)}`;
 };
 
-// End-to-end "Send via WhatsApp" action: fetches/creates a secure share link
-// for the slip, builds the pre-filled message, and opens WhatsApp directly to
-// the tenant's chat. Used by SlipModal, History, and Slips pages.
+// End-to-end "Send via WhatsApp" action:
+// 1. Auto-downloads the rent slip as a PNG image (so the user can attach it).
+// 2. Opens WhatsApp with a pre-filled simplified message.
+//
+// Why: WhatsApp Web/app does not allow file attachments via wa.me URLs.
+// The best achievable UX is: slip is already in Downloads, user just
+// taps the attachment icon in WhatsApp and selects the file — one extra tap.
+//
+// `slipElement` is the DOM node to capture (slipRef.current from SlipModal).
+// If not provided, falls back to text-only message (e.g. History/Slips pages).
 // Returns true on success, false on failure (toasts handle user feedback).
-export const sendSlipViaWhatsApp = async (record, house) => {
+export const sendSlipViaWhatsApp = async (record, house, slipElement = null) => {
   const phone = house?.whatsappNumber || house?.phone;
   if (!cleanPhone(phone)) {
     toast.error('Tenant phone number is missing. Add it from Edit Tenant.');
     return false;
   }
-  try {
-    const res = await rentRecordsAPI.getShareLink(record._id);
-    const token = res?.data?.data?.token;
-    if (!token) throw new Error('No token');
 
-    const shareUrl = `${window.location.origin}/share/${token}`;
-    const message  = buildWhatsAppMessage(record, house, shareUrl);
-    const waUrl    = buildWhatsAppUrl(house, message);
+  try {
+    // Step 1: Auto-download slip image so tenant can attach it in WhatsApp.
+    if (slipElement) {
+      try {
+        const html2canvas = (await import('html2canvas')).default;
+        const canvas = await html2canvas(slipElement, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+        });
+        const link = document.createElement('a');
+        link.download = `RentSlip_${house.tenantName}_${record.month}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        toast.success('Rent slip image saved — attach it in WhatsApp!', { duration: 5000 });
+      } catch (imgErr) {
+        console.warn('sendSlipViaWhatsApp: image download failed, continuing without it', imgErr);
+        // Non-fatal — still open WhatsApp with the message
+      }
+    }
+
+    // Step 2: Build simplified WhatsApp message (no link, no breakdown).
+    const message = buildWhatsAppMessage(record, house);
+    const waUrl   = buildWhatsAppUrl(house, message);
     if (!waUrl) {
       toast.error('Invalid tenant phone number');
       return false;
     }
 
-    window.open(waUrl, '_blank', 'noopener,noreferrer');
-    toast.success('Opening WhatsApp…');
+    // Small delay so the download dialog doesn't compete with the new tab.
+    setTimeout(() => {
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+    }, slipElement ? 600 : 0);
+
     return true;
   } catch (err) {
     console.error('sendSlipViaWhatsApp:', err);
-    toast.error('Failed to generate share link');
+    toast.error('Failed to open WhatsApp');
     return false;
   }
 };
