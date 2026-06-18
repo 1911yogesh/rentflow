@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Sora:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,83 +7,130 @@
 @layer base {
   * { box-sizing: border-box; }
   body {
-    font-family: 'DM Sans', sans-serif;
-    background-color: #f0ede8;
-    color: #1a1917;
+    font-family: 'Inter', sans-serif;
+    background-color: #f4f6f8;
+    color: #111827;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   h1, h2, h3, h4, h5 {
-    font-family: 'Sora', sans-serif;
+    font-family: 'Plus Jakarta Sans', sans-serif;
   }
 }
 
 @layer components {
+  /* ── Cards ───────────────────────────────────────────────────────────── */
   .card {
-    @apply bg-white border border-gray-200 rounded-xl shadow-sm;
+    @apply bg-white border border-gray-100 rounded-2xl shadow-sm;
   }
+  .card-hover {
+    @apply card cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-px;
+  }
+
+  /* ── Buttons ─────────────────────────────────────────────────────────── */
   .btn {
-    @apply inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold
-           transition-all duration-150 cursor-pointer border border-transparent whitespace-nowrap;
+    @apply inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold
+           transition-all duration-150 cursor-pointer border border-transparent
+           whitespace-nowrap select-none focus-visible:outline-none
+           focus-visible:ring-2 focus-visible:ring-offset-1;
   }
   .btn-primary {
-    @apply bg-blue-600 text-white hover:bg-blue-700;
+    @apply bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800
+           focus-visible:ring-indigo-500 shadow-sm;
   }
   .btn-secondary {
-    @apply bg-white text-gray-700 border-gray-300 hover:bg-gray-50;
+    @apply bg-white text-gray-700 border-gray-200 hover:bg-gray-50
+           active:bg-gray-100 focus-visible:ring-gray-400 shadow-sm;
   }
   .btn-danger {
-    @apply bg-red-50 text-red-600 border-red-200 hover:bg-red-100;
+    @apply bg-red-50 text-red-600 border-red-200 hover:bg-red-100
+           active:bg-red-200 focus-visible:ring-red-400;
   }
   .btn-ghost {
-    @apply bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800;
+    @apply bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800
+           focus-visible:ring-gray-400;
   }
   .btn-sm {
-    @apply px-3 py-1.5 text-xs;
+    @apply px-3 py-1.5 text-xs rounded-lg;
   }
-  .form-input {
-    @apply w-full min-h-10 px-3 py-2.5 border border-gray-300 rounded-lg text-sm
-           text-gray-900 placeholder:text-gray-400 bg-white shadow-sm
-           focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500
-           disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed
-           transition-colors duration-150;
+  .btn-xs {
+    @apply px-2.5 py-1 text-[11px] rounded-md;
   }
-  .input {
-    @apply w-full min-h-10 px-3 py-2.5 border border-gray-300 rounded-lg text-sm
+  .btn:disabled {
+    @apply opacity-50 cursor-not-allowed pointer-events-none;
+  }
+
+  /* ── Inputs ──────────────────────────────────────────────────────────── */
+  .form-input, .input {
+    @apply w-full min-h-[42px] px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm
            text-gray-900 placeholder:text-gray-400 bg-white shadow-sm
-           focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500
-           disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed
-           transition-colors duration-150;
+           focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500
+           disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed
+           transition-all duration-150;
   }
   .form-label {
-    @apply block text-xs font-semibold text-gray-600 mb-1.5;
+    @apply block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide;
   }
+
+  /* ── Badges ──────────────────────────────────────────────────────────── */
   .badge {
-    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide;
   }
-  .badge-green  { @apply bg-green-50  text-green-700; }
-  .badge-red    { @apply bg-red-50    text-red-700; }
-  .badge-amber  { @apply bg-amber-50  text-amber-700; }
-  .badge-blue   { @apply bg-blue-50   text-blue-700; }
-  .badge-gray   { @apply bg-gray-100  text-gray-500; }
+  /* Status badges — stronger, more visible */
+  .badge-green  {
+    @apply bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200;
+  }
+  .badge-red    {
+    @apply bg-red-100 text-red-700 ring-1 ring-red-200;
+  }
+  .badge-amber  {
+    @apply bg-amber-100 text-amber-700 ring-1 ring-amber-200;
+  }
+  .badge-blue   {
+    @apply bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200;
+  }
+  .badge-gray   {
+    @apply bg-gray-100 text-gray-500 ring-1 ring-gray-200;
+  }
+  /* Larger pill for payment status — easily scannable */
+  .status-pill {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold tracking-wide;
+  }
+  .status-paid    { @apply bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200; }
+  .status-unpaid  { @apply bg-red-100 text-red-700 ring-1 ring-red-200; }
+  .status-partial { @apply bg-amber-100 text-amber-700 ring-1 ring-amber-200; }
 }
 
-/* Skeleton loading animation */
+/* ── Skeleton ──────────────────────────────────────────────────────────────── */
 .skeleton {
-  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background: linear-gradient(90deg, #e9ecef 25%, #f1f3f5 50%, #e9ecef 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.4s infinite;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 @keyframes skeleton-shimmer {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
 
-/* Custom scrollbar */
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #adb5bd; }
 
-/* Mobile bottom-nav safe area */
+/* ── Mobile bottom nav safe area ──────────────────────────────────────────── */
 .mobile-safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
+
+/* ── Page fade-in ──────────────────────────────────────────────────────────── */
+@keyframes pageFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter { animation: pageFadeIn 0.2s ease forwards; }
+
+/* ── Modal ─────────────────────────────────────────────────────────────────── */
+@keyframes modalIn {
+  from { transform: translateY(20px) scale(0.98); opacity: 0; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
+}
