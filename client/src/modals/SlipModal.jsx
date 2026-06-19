@@ -67,12 +67,6 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
     } catch { toast.error('Failed to generate image'); }
   };
 
-  const sendViaWhatsApp = async () => {
-    setSendingWa(true);
-    await sendSlipViaWhatsApp(p, house, slipRef.current);
-    setSendingWa(false);
-  };
-
   const printSlip = () => {
     const w = window.open('', '_blank');
     w.document.write(`<html><head><title>Rent Slip</title>
@@ -104,9 +98,24 @@ const SlipModal = ({ open, onClose, payment: p, house }) => {
       footer={
         <div className="flex gap-2 flex-wrap items-center">
           <button className="btn btn-secondary btn-sm" onClick={onClose}>Close</button>
-          <button className="btn btn-secondary btn-sm" onClick={printSlip}>🖨️ Print</button>
-          <button className="btn btn-secondary btn-sm" onClick={downloadImage}>🖼️ Image</button>
-          <button className="btn btn-primary btn-sm"   onClick={downloadPDF}>📄 PDF</button>
+          <button className="btn btn-secondary btn-sm" onClick={printSlip}>
+            <Printer size={13} /> Print
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={downloadImage}>
+            <FileImage size={13} /> Image
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={downloadPDF}>
+            <Download size={13} /> PDF
+          </button>
+          <button
+            className="btn btn-sm text-white"
+            style={{ background: '#25D366' }}
+            onClick={sendViaWhatsApp}
+            disabled={sendingWa}
+          >
+            <MessageCircle size={13} />
+            {sendingWa ? 'Opening…' : 'WhatsApp'}
+          </button>
         </div>
       }
     >
